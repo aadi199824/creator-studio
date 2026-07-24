@@ -14,7 +14,7 @@ export interface Content {
   status: string;
 
   created_at: string;
-
+  scheduled_at: string | null;
   brands: {
     name: string;
   } | null;

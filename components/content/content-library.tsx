@@ -9,10 +9,13 @@ import EditContentDialog from "./edit-content-dialog";
 
 import { ContentService } from "@/lib/services/content.service";
 import { Content } from "@/lib/types/content";
+import ScheduleDialog from "@/components/content/schedule-dialog";
 
 export default function ContentLibrary() {
   const [generations, setGenerations] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [selectedContent, setSelectedContent] = useState<Content | null>(null);
 
   const [search, setSearch] = useState("");
 
@@ -20,8 +23,7 @@ export default function ContentLibrary() {
   const [platformFilter, setPlatformFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
-  const [selectedContent, setSelectedContent] =
-    useState<Content | null>(null);
+  
 
   const [editOpen, setEditOpen] = useState(false);
 
@@ -87,7 +89,10 @@ async function handleDuplicate(item: Content) {
     ]);
   }
 }
-
+function handleSchedule(item: Content) {
+  setSelectedContent(item);
+  setScheduleOpen(true);
+}
 function handleEdit(item: Content) {
   setSelectedContent(item);
   setEditOpen(true);
@@ -185,11 +190,20 @@ return (
             onEdit={handleEdit}
             onDelete={handleDelete}
             onDuplicate={handleDuplicate}
-            />
+            onSchedule={handleSchedule}
+          />
         ))}
       </div>
     )}
-
+    {selectedContent && (
+      <ScheduleDialog
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        contentId={selectedContent.id}
+        topic={selectedContent.topic}
+        onScheduled={fetchGenerations}
+      />
+    )}
     {/* Edit Dialog */}
     <EditContentDialog
       open={editOpen}

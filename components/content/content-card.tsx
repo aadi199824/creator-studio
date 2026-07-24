@@ -7,6 +7,7 @@ interface Props {
   onEdit: (item: Content) => void;
   onDelete: (id: string) => void;
   onDuplicate: (item: Content) => void;
+  onSchedule: (item: Content) => void;
 }
 
 export default function ContentCard({
@@ -14,6 +15,7 @@ export default function ContentCard({
   onEdit,
   onDelete,
   onDuplicate,
+  onSchedule,
 }: Props) {
   const createdDate = new Date(
     item.created_at
@@ -126,6 +128,12 @@ export default function ContentCard({
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium transition hover:bg-gray-100"
             >
               📄 Duplicate
+            </button>
+            <button
+              onClick={() => onSchedule(item)}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium transition hover:bg-gray-100"
+            >
+              📅 Schedule
             </button>
 
           <DeleteDialog
