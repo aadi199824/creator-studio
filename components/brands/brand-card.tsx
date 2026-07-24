@@ -13,8 +13,8 @@ interface Brand {
 export default function BrandCard({ brand }: { brand: Brand }) {
   return (
     <Card className="hover:shadow-lg transition">
-      <CardContent className="p-6">
-        <div className="text-4xl">{brand.icon}</div>
+      <CardContent className="p-8">
+        <div className="text-5xl font-extrabold">{brand.icon}</div>
 
         <h2 className="mt-4 text-xl font-bold">
           {brand.name}
