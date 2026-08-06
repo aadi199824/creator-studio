@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
 import {
   Popover,
   PopoverContent,
@@ -38,7 +40,7 @@ export default function ScheduleDialog({
   topic,
   onScheduled,
 }: ScheduleDialogProps) {
-  const [date, setDate] = useState<Date>();
+  const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState("10:00");
   const [loading, setLoading] = useState(false);
 
@@ -48,31 +50,80 @@ export default function ScheduleDialog({
       return;
     }
 
-    const [hours, minutes] = time.split(":").map(Number);
-
-    const scheduledDate = new Date(date);
-    scheduledDate.setHours(hours);
-    scheduledDate.setMinutes(minutes);
-    scheduledDate.setSeconds(0);
-
-    setLoading(true);
-
-    const { error } =
-      await CalendarService.scheduleContent(
-        contentId,
-        scheduledDate.toISOString()
-      );
-
-    setLoading(false);
-
-    if (error) {
-      toast.error("Failed to schedule content.");
+    if (!time) {
+      toast.error("Please select a time.");
       return;
     }
 
-    toast.success("Content scheduled successfully.");
+    const [hours, minutes] = time.split(":").map(Number);
 
-    onScheduled();
+    if (
+      Number.isNaN(hours) ||
+      Number.isNaN(minutes)
+    ) {
+      toast.error("Please select a valid time.");
+      return;
+    }
+
+    const scheduledDate = new Date(date);
+
+    scheduledDate.setHours(
+      hours,
+      minutes,
+      0,
+      0
+    );
+
+    try {
+      setLoading(true);
+
+      const { error } =
+        await CalendarService.scheduleContent(
+          contentId,
+          scheduledDate.toISOString()
+        );
+
+      if (error) {
+        console.error(
+          "Schedule Content Error:",
+          error
+        );
+
+        toast.error(
+          "Failed to schedule content."
+        );
+
+        return;
+      }
+
+      toast.success(
+        "Content scheduled successfully."
+      );
+
+      onScheduled();
+
+      onOpenChange(false);
+
+      // Reset form
+      setDate(undefined);
+      setTime("10:00");
+    } catch (error) {
+      console.error(
+        "Schedule Content Error:",
+        error
+      );
+
+      toast.error(
+        "Failed to schedule content."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleClose() {
+    if (loading) return;
+
     onOpenChange(false);
   }
 
@@ -88,28 +139,33 @@ export default function ScheduleDialog({
           </DialogTitle>
 
           <DialogDescription>
-            Schedule "{topic}" for publishing.
+            Schedule &quot;{topic}&quot; for
+            publishing.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Date */}
           <div>
             <label className="mb-2 block text-sm font-medium">
               Date
             </label>
 
             <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-left"
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
+              <PopoverTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start text-left"
+                  />
+                }
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
 
-                  {date
-                    ? format(date, "PPP")
-                    : "Pick a date"}
-                </Button>
+                {date
+                  ? format(date, "PPP")
+                  : "Pick a date"}
               </PopoverTrigger>
 
               <PopoverContent className="w-auto p-0">
@@ -122,6 +178,7 @@ export default function ScheduleDialog({
             </Popover>
           </div>
 
+          {/* Time */}
           <div>
             <label className="mb-2 block text-sm font-medium">
               Time
@@ -140,17 +197,18 @@ export default function ScheduleDialog({
 
         <DialogFooter>
           <Button
+            type="button"
             variant="outline"
-            onClick={() =>
-              onOpenChange(false)
-            }
+            disabled={loading}
+            onClick={handleClose}
           >
             Cancel
           </Button>
 
           <Button
+            type="button"
             onClick={handleSchedule}
-            disabled={loading}
+            disabled={loading || !date}
           >
             {loading
               ? "Scheduling..."

@@ -60,29 +60,38 @@ export default function EditContentDialog({
     if (!content) return;
 
     reset({
-      topic: content.topic,
-      platform: content.platform,
-      content_type: content.content_type,
-      tone: content.tone,
-      status: content.status,
-      prompt: content.prompt,
+      topic: content.topic ?? "",
+      platform: content.platform ?? "",
+      content_type: content.content_type ?? "",
+      tone: content.tone ?? "",
+      status: content.status ?? "draft",
+      prompt: content.prompt ?? "",
     });
   }, [content, reset]);
 
   async function onSubmit(values: ContentFormValues) {
     if (!content) return;
 
-    const { error } = await ContentService.update(content.id, values);
+    try {
+      const { error } = await ContentService.update(
+        content.id,
+        values
+      );
 
-    if (error) {
+      if (error) {
+        console.error("Update Content Error:", error);
+        toast.error("Failed to update content.");
+        return;
+      }
+
+      toast.success("Content updated successfully.");
+
+      onUpdated();
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Update Content Error:", error);
       toast.error("Failed to update content.");
-      return;
     }
-
-    toast.success("Content updated successfully.");
-
-    onUpdated();
-    onOpenChange(false);
   }
 
   return (
@@ -96,11 +105,13 @@ export default function EditContentDialog({
           onSubmit={handleSubmit(onSubmit)}
           className="space-y-5"
         >
+          {/* Topic */}
           <div>
             <Input
               placeholder="Topic"
               {...register("topic")}
             />
+
             {errors.topic && (
               <p className="mt-1 text-sm text-red-500">
                 {errors.topic.message}
@@ -108,46 +119,91 @@ export default function EditContentDialog({
             )}
           </div>
 
+          {/* Platform */}
           <Select
-            value={watch("platform")}
-            onValueChange={(v) => setValue("platform", v)}
+            value={watch("platform") ?? ""}
+            onValueChange={(value) => {
+              if (value !== null) {
+                setValue("platform", value, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder="Platform" />
             </SelectTrigger>
 
             <SelectContent>
-              <SelectItem value="Instagram">Instagram</SelectItem>
-              <SelectItem value="Facebook">Facebook</SelectItem>
-              <SelectItem value="LinkedIn">LinkedIn</SelectItem>
-              <SelectItem value="X">X</SelectItem>
-              <SelectItem value="YouTube">YouTube</SelectItem>
+              <SelectItem value="Instagram">
+                Instagram
+              </SelectItem>
+
+              <SelectItem value="Facebook">
+                Facebook
+              </SelectItem>
+
+              <SelectItem value="LinkedIn">
+                LinkedIn
+              </SelectItem>
+
+              <SelectItem value="X">
+                X
+              </SelectItem>
+
+              <SelectItem value="YouTube">
+                YouTube
+              </SelectItem>
             </SelectContent>
           </Select>
 
+          {/* Content Type */}
           <Select
-            value={watch("content_type")}
-            onValueChange={(v) =>
-              setValue("content_type", v)
-            }
+            value={watch("content_type") ?? ""}
+            onValueChange={(value) => {
+              if (value !== null) {
+                setValue("content_type", value, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder="Content Type" />
             </SelectTrigger>
 
             <SelectContent>
-              <SelectItem value="Post">Post</SelectItem>
+              <SelectItem value="Post">
+                Post
+              </SelectItem>
+
               <SelectItem value="Carousel">
                 Carousel
               </SelectItem>
-              <SelectItem value="Reel">Reel</SelectItem>
-              <SelectItem value="Story">Story</SelectItem>
+
+              <SelectItem value="Reel">
+                Reel
+              </SelectItem>
+
+              <SelectItem value="Story">
+                Story
+              </SelectItem>
             </SelectContent>
           </Select>
 
+          {/* Tone */}
           <Select
-            value={watch("tone")}
-            onValueChange={(v) => setValue("tone", v)}
+            value={watch("tone") ?? ""}
+            onValueChange={(value) => {
+              if (value !== null) {
+                setValue("tone", value, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder="Tone" />
@@ -157,51 +213,73 @@ export default function EditContentDialog({
               <SelectItem value="Professional">
                 Professional
               </SelectItem>
-              <SelectItem value="Funny">Funny</SelectItem>
+
+              <SelectItem value="Funny">
+                Funny
+              </SelectItem>
+
               <SelectItem value="Motivational">
                 Motivational
               </SelectItem>
+
               <SelectItem value="Devotional">
                 Devotional
               </SelectItem>
             </SelectContent>
           </Select>
 
+          {/* Status */}
           <Select
-            value={watch("status")}
-            onValueChange={(v) => setValue("status", v)}
+            value={watch("status") ?? ""}
+            onValueChange={(value) => {
+              if (value !== null) {
+                setValue("status", value, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder="Status" />
             </SelectTrigger>
 
             <SelectContent>
-              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="draft">
+                Draft
+              </SelectItem>
+
               <SelectItem value="scheduled">
                 Scheduled
               </SelectItem>
+
               <SelectItem value="published">
                 Published
               </SelectItem>
             </SelectContent>
           </Select>
 
-          <Textarea
-            rows={8}
-            placeholder="Prompt"
-            {...register("prompt")}
-          />
+          {/* Prompt */}
+          <div>
+            <Textarea
+              rows={8}
+              placeholder="Prompt"
+              {...register("prompt")}
+            />
 
-          {errors.prompt && (
-            <p className="text-sm text-red-500">
-              {errors.prompt.message}
-            </p>
-          )}
+            {errors.prompt && (
+              <p className="mt-1 text-sm text-red-500">
+                {errors.prompt.message}
+              </p>
+            )}
+          </div>
 
+          {/* Actions */}
           <div className="flex justify-end gap-3">
             <Button
               type="button"
               variant="outline"
+              disabled={isSubmitting}
               onClick={() => onOpenChange(false)}
             >
               Cancel
