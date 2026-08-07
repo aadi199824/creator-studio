@@ -58,13 +58,17 @@ export default function InstagramAccounts() {
             >
               <div className="flex items-center gap-4">
 
-                <img
-                  src={
-                    account.profile_picture ||
-                    "/default-avatar.png"
-                  }
-                  className="h-12 w-12 rounded-full"
-                />
+                {account.profile_picture ? (
+                  <img
+                    src={account.profile_picture}
+                    alt={`@${account.username}`}
+                    className="h-12 w-12 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-lg font-semibold text-slate-600">
+                    {account.username?.charAt(0).toUpperCase()}
+                  </div>
+                )}
 
                 <div>
                   <div className="font-semibold">

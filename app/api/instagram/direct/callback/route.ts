@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID!;
-const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET!;
-const INSTAGRAM_REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI!;
+/* -------------------------------------------------------------------------- */
+/* Environment                                                                */
+/* -------------------------------------------------------------------------- */
+
+const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID;
+const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET;
+const INSTAGRAM_REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI;
+
+/* -------------------------------------------------------------------------- */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
 
 interface TokenResponse {
   data?: Array<{
@@ -12,73 +20,140 @@ interface TokenResponse {
     permissions?: string;
   }>;
 
-  // Keep compatibility in case Meta returns the simpler shape.
   access_token?: string;
   user_id?: string;
+
+  error_type?: string;
+  code?: number;
+  error_message?: string;
 }
 
 interface LongLivedTokenResponse {
-  access_token: string;
+  access_token?: string;
   token_type?: string;
   expires_in?: number;
+
+  error?: {
+    message?: string;
+    type?: string;
+    code?: number;
+  };
 }
 
 interface InstagramProfile {
-  id: string;
-  username: string;
+  id?: string;
+  username?: string;
   profile_picture_url?: string;
+
+  error?: {
+    message?: string;
+    type?: string;
+    code?: number;
+  };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function redirect(
+  request: NextRequest,
+  path: string
+) {
+  return NextResponse.redirect(
+    new URL(path, request.url)
+  );
+}
+
+function validateEnvironment() {
+  if (!INSTAGRAM_APP_ID) {
+    throw new Error(
+      "INSTAGRAM_APP_ID environment variable is missing."
+    );
+  }
+
+  if (!INSTAGRAM_APP_SECRET) {
+    throw new Error(
+      "INSTAGRAM_APP_SECRET environment variable is missing."
+    );
+  }
+
+  if (!INSTAGRAM_REDIRECT_URI) {
+    throw new Error(
+      "INSTAGRAM_REDIRECT_URI environment variable is missing."
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Callback                                                                   */
+/* -------------------------------------------------------------------------- */
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
   const code = searchParams.get("code");
   const oauthError = searchParams.get("error");
+  const oauthErrorDescription =
+    searchParams.get("error_description");
 
-  // User cancelled Instagram authorization
+  /* ------------------------------------------------------------------------ */
+  /* User denied/cancelled authorization                                      */
+  /* ------------------------------------------------------------------------ */
+
   if (oauthError) {
-    return NextResponse.redirect(
-      new URL(
-        "/dashboard/instagram?error=access_denied",
-        request.url
-      )
+    console.error(
+      "Instagram authorization denied:",
+      oauthError,
+      oauthErrorDescription
+    );
+
+    return redirect(
+      request,
+      "/dashboard/instagram?error=access_denied"
     );
   }
 
   if (!code) {
-    return NextResponse.redirect(
-      new URL(
-        "/dashboard/instagram?error=missing_code",
-        request.url
-      )
+    return redirect(
+      request,
+      "/dashboard/instagram?error=missing_code"
     );
   }
 
   try {
-    if (
-      !INSTAGRAM_APP_ID ||
-      !INSTAGRAM_APP_SECRET ||
-      !INSTAGRAM_REDIRECT_URI
-    ) {
-      throw new Error(
-        "Instagram environment variables are missing."
-      );
-    }
+    validateEnvironment();
 
-    /*
-     * STEP 1
-     * Exchange authorization code for short-lived token.
-     */
+    /* ---------------------------------------------------------------------- */
+    /* STEP 1: Exchange authorization code for short-lived access token       */
+    /* ---------------------------------------------------------------------- */
 
     const tokenBody = new FormData();
 
-    tokenBody.append("client_id", INSTAGRAM_APP_ID);
-    tokenBody.append("client_secret", INSTAGRAM_APP_SECRET);
-    tokenBody.append("grant_type", "authorization_code");
-    tokenBody.append("redirect_uri", INSTAGRAM_REDIRECT_URI);
+    tokenBody.append(
+      "client_id",
+      INSTAGRAM_APP_ID!
+    );
 
-    // Meta may append #_ to the returned code.
-    tokenBody.append("code", code.replace(/#_$/, ""));
+    tokenBody.append(
+      "client_secret",
+      INSTAGRAM_APP_SECRET!
+    );
+
+    tokenBody.append(
+      "grant_type",
+      "authorization_code"
+    );
+
+    tokenBody.append(
+      "redirect_uri",
+      INSTAGRAM_REDIRECT_URI!
+    );
+
+    tokenBody.append(
+      "code",
+      code.replace(/#_$/, "")
+    );
 
     const tokenResponse = await fetch(
       "https://api.instagram.com/oauth/access_token",
@@ -94,12 +169,13 @@ export async function GET(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       console.error(
-        "Instagram token exchange failed:",
+        "Instagram short-lived token exchange failed:",
         tokenData
       );
 
       throw new Error(
-        "Unable to exchange Instagram authorization code."
+        tokenData.error_message ||
+          "Unable to exchange Instagram authorization code."
       );
     }
 
@@ -113,7 +189,7 @@ export async function GET(request: NextRequest) {
 
     if (!shortLivedAccessToken) {
       console.error(
-        "Instagram token response:",
+        "Instagram token response did not contain access_token:",
         tokenData
       );
 
@@ -122,10 +198,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    /*
-     * STEP 2
-     * Exchange short-lived token for long-lived token.
-     */
+    /* ---------------------------------------------------------------------- */
+    /* STEP 2: Exchange short-lived token for long-lived token                */
+    /* ---------------------------------------------------------------------- */
 
     const longTokenUrl = new URL(
       "https://graph.instagram.com/access_token"
@@ -138,7 +213,7 @@ export async function GET(request: NextRequest) {
 
     longTokenUrl.searchParams.set(
       "client_secret",
-      INSTAGRAM_APP_SECRET
+      INSTAGRAM_APP_SECRET!
     );
 
     longTokenUrl.searchParams.set(
@@ -157,30 +232,27 @@ export async function GET(request: NextRequest) {
     const longTokenData: LongLivedTokenResponse =
       await longTokenResponse.json();
 
-    if (!longTokenResponse.ok) {
+    if (
+      !longTokenResponse.ok ||
+      !longTokenData.access_token
+    ) {
       console.error(
-        "Long-lived token exchange failed:",
+        "Instagram long-lived token exchange failed:",
         longTokenData
       );
 
       throw new Error(
-        "Unable to generate long-lived Instagram token."
+        longTokenData.error?.message ||
+          "Unable to generate long-lived Instagram token."
       );
     }
 
     const accessToken =
       longTokenData.access_token;
 
-    if (!accessToken) {
-      throw new Error(
-        "Long-lived Instagram access token missing."
-      );
-    }
-
-    /*
-     * STEP 3
-     * Get Instagram profile.
-     */
+    /* ---------------------------------------------------------------------- */
+    /* STEP 3: Fetch Instagram profile                                        */
+    /* ---------------------------------------------------------------------- */
 
     const profileUrl = new URL(
       "https://graph.instagram.com/me"
@@ -214,13 +286,14 @@ export async function GET(request: NextRequest) {
       );
 
       throw new Error(
-        "Unable to fetch Instagram profile."
+        profile.error?.message ||
+          "Unable to fetch Instagram profile."
       );
     }
 
     if (!profile.id || !profile.username) {
       console.error(
-        "Invalid Instagram profile:",
+        "Incomplete Instagram profile:",
         profile
       );
 
@@ -229,10 +302,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    /*
-     * STEP 4
-     * Get currently authenticated Creator Studio user.
-     */
+    /* ---------------------------------------------------------------------- */
+    /* STEP 4: Get logged-in Creator Studio user                              */
+    /* ---------------------------------------------------------------------- */
 
     const supabase =
       await createServerSupabaseClient();
@@ -244,7 +316,7 @@ export async function GET(request: NextRequest) {
 
     if (userError) {
       console.error(
-        "Supabase auth error:",
+        "Supabase authentication error:",
         userError
       );
 
@@ -252,18 +324,15 @@ export async function GET(request: NextRequest) {
     }
 
     if (!user) {
-      return NextResponse.redirect(
-        new URL(
-          "/login?error=instagram_auth_required",
-          request.url
-        )
+      return redirect(
+        request,
+        "/login?error=instagram_auth_required"
       );
     }
 
-    /*
-     * STEP 5
-     * Calculate token expiration.
-     */
+    /* ---------------------------------------------------------------------- */
+    /* STEP 5: Calculate token expiration                                     */
+    /* ---------------------------------------------------------------------- */
 
     let expiresAt: string | null = null;
 
@@ -274,26 +343,35 @@ export async function GET(request: NextRequest) {
       ).toISOString();
     }
 
-    /*
-     * STEP 6
-     * Check whether this Instagram account
-     * is already connected by this user.
-     */
+    /* ---------------------------------------------------------------------- */
+    /* STEP 6: Check whether account already exists                           */
+    /* ---------------------------------------------------------------------- */
 
-    const { data: existingAccount } =
-      await supabase
-        .from("social_accounts")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("platform", "instagram")
-        .eq("account_id", profile.id)
-        .maybeSingle();
+    const {
+      data: existingAccount,
+      error: existingAccountError,
+    } = await supabase
+      .from("social_accounts")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("platform", "instagram")
+      .eq("account_id", profile.id)
+      .maybeSingle();
+
+    if (existingAccountError) {
+      console.error(
+        "Instagram account lookup error:",
+        existingAccountError
+      );
+
+      throw existingAccountError;
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* STEP 7: Update existing account OR insert new account                  */
+    /* ---------------------------------------------------------------------- */
 
     if (existingAccount) {
-      /*
-       * Refresh existing account/token.
-       */
-
       const { error: updateError } =
         await supabase
           .from("social_accounts")
@@ -301,8 +379,13 @@ export async function GET(request: NextRequest) {
             account_name: profile.username,
             access_token: accessToken,
             expires_at: expiresAt,
+
+            // Save real Instagram profile picture.
+            profile_picture:
+              profile.profile_picture_url ?? null,
           })
-          .eq("id", existingAccount.id);
+          .eq("id", existingAccount.id)
+          .eq("user_id", user.id);
 
       if (updateError) {
         console.error(
@@ -312,24 +395,42 @@ export async function GET(request: NextRequest) {
 
         throw updateError;
       }
-    } else {
-      /*
-       * Save new Instagram account.
-       */
 
+      console.log(
+        "Instagram account updated:",
+        profile.username
+      );
+    } else {
       const { error: insertError } =
         await supabase
           .from("social_accounts")
           .insert({
             user_id: user.id,
+
             platform: "instagram",
-            account_name: profile.username,
+
+            account_name:
+              profile.username,
+
             account_id:
               profile.id || instagramUserId,
-            access_token: accessToken,
-            refresh_token: null,
-            expires_at: expiresAt,
-            page_id: null,
+
+            access_token:
+              accessToken,
+
+            refresh_token:
+              null,
+
+            expires_at:
+              expiresAt,
+
+            // Direct Instagram Login does not require Facebook page_id.
+            page_id:
+              null,
+
+            // Save real Instagram profile picture.
+            profile_picture:
+              profile.profile_picture_url ?? null,
           });
 
       if (insertError) {
@@ -340,35 +441,30 @@ export async function GET(request: NextRequest) {
 
         throw insertError;
       }
+
+      console.log(
+        "Instagram account created:",
+        profile.username
+      );
     }
 
-    console.log(
-      "Instagram account connected:",
-      profile.username
-    );
+    /* ---------------------------------------------------------------------- */
+    /* STEP 8: Success                                                        */
+    /* ---------------------------------------------------------------------- */
 
-    /*
-     * STEP 7
-     * Return to Instagram dashboard.
-     */
-
-    return NextResponse.redirect(
-      new URL(
-        "/dashboard/instagram?oauth=success",
-        request.url
-      )
+    return redirect(
+      request,
+      "/dashboard/instagram?oauth=success"
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(
       "INSTAGRAM DIRECT CALLBACK ERROR:",
       error
     );
 
-    return NextResponse.redirect(
-      new URL(
-        "/dashboard/instagram?error=callback_failed",
-        request.url
-      )
+    return redirect(
+      request,
+      "/dashboard/instagram?error=callback_failed"
     );
   }
 }

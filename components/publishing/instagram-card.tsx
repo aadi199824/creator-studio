@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/card";
 
 import { Button } from "@/components/ui/button";
+
 import {
   CheckCircle2,
   ExternalLink,
-  ImageIcon,
   User,
 } from "lucide-react";
 
@@ -32,36 +32,65 @@ export function InstagramCard() {
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
   const [loading, setLoading] = useState(true);
 
+  /**
+   * Load Instagram accounts from Supabase
+   */
+  async function loadInstagramAccounts() {
+    setLoading(true);
+
+    try {
+      const { data, error } = await SocialService.getAccounts();
+
+      console.log("SOCIAL ACCOUNTS DATA:", data);
+      console.log("SOCIAL ACCOUNTS ERROR:", error);
+
+      if (error) {
+        console.error("Failed to load accounts:", error);
+        setAccounts([]);
+        return;
+      }
+
+      const instagramAccounts =
+        data?.filter(
+          (account) => account.platform === "instagram"
+        ) ?? [];
+
+      console.log(
+        "INSTAGRAM ACCOUNTS:",
+        instagramAccounts
+      );
+
+      setAccounts(instagramAccounts);
+    } catch (error) {
+      console.error(
+        "Unexpected error loading Instagram accounts:",
+        error
+      );
+
+      setAccounts([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /**
+   * Load accounts when component mounts
+   */
   useEffect(() => {
     loadInstagramAccounts();
   }, []);
 
-  async function loadInstagramAccounts() {
-    setLoading(true);
-
-    const { data, error } = await SocialService.getAccounts();
-
-    if (error) {
-      console.error("Failed to load accounts:", error);
-      setLoading(false);
-      return;
-    }
-
-    const instagramAccounts =
-      data?.filter(
-        (account) => account.platform === "instagram"
-      ) ?? [];
-
-    setAccounts(instagramAccounts);
-    setLoading(false);
-  }
-
+  /**
+   * Disconnect Instagram account
+   */
   async function handleDisconnect(id: string) {
     const confirmed = window.confirm(
       "Are you sure you want to disconnect this Instagram account?"
     );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     const { error } = await SocialService.disconnect(id);
 
@@ -71,20 +100,16 @@ export function InstagramCard() {
       return;
     }
 
-    // Remove from UI without reloading page
+    // Remove disconnected account from UI
     setAccounts((current) =>
       current.filter((account) => account.id !== id)
     );
   }
 
   return (
-    <Card className="transition-all hover:shadow-md">
+    <Card>
       <CardHeader>
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 p-3 text-white">
-            <ImageIcon className="h-6 w-6" />
-          </div>
-
+        <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
             <CardTitle>Instagram Accounts</CardTitle>
 
@@ -138,6 +163,10 @@ export function InstagramCard() {
 
                       <p className="text-sm text-muted-foreground">
                         Instagram Business
+                      </p>
+
+                      <p className="text-xs text-muted-foreground">
+                        ID: {account.account_id}
                       </p>
                     </div>
                   </div>
