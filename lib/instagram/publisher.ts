@@ -1,4 +1,47 @@
-const GRAPH_API = "https://graph.facebook.com/v23.0";
+const GRAPH_API =
+  "https://graph.instagram.com/v23.0";
+
+interface InstagramApiResponse {
+  id?: string;
+  error?: {
+    message?: string;
+    type?: string;
+    code?: number;
+  };
+}
+
+async function instagramRequest(
+  url: string,
+  accessToken: string,
+  body: Record<string, string>
+) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams(body).toString(),
+    cache: "no-store",
+  });
+
+  const data: InstagramApiResponse =
+    await response.json();
+
+  if (!response.ok) {
+    console.error(
+      "Instagram API error:",
+      data
+    );
+
+    throw new Error(
+      data.error?.message ||
+        "Instagram API request failed."
+    );
+  }
+
+  return data;
+}
 
 export async function createMediaContainer(
   instagramAccountId: string,
@@ -6,26 +49,28 @@ export async function createMediaContainer(
   imageUrl: string,
   caption: string
 ) {
-  const response = await fetch(
-    `${GRAPH_API}/${instagramAccountId}/media`,
+  const url =
+    `${GRAPH_API}/${instagramAccountId}/media`;
+
+  const data = await instagramRequest(
+    url,
+    accessToken,
     {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        image_url: imageUrl,
-        caption,
-        access_token: accessToken,
-      }),
+      image_url: imageUrl,
+      caption: caption || "",
     }
   );
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error?.message || "Unable to create media container.");
+  if (!data.id) {
+    throw new Error(
+      "Instagram did not return a media container ID."
+    );
   }
+
+  console.log(
+    "Instagram media container created:",
+    data.id
+  );
 
   return data.id;
 }
@@ -35,25 +80,27 @@ export async function publishMedia(
   accessToken: string,
   creationId: string
 ) {
-  const response = await fetch(
-    `${GRAPH_API}/${instagramAccountId}/media_publish`,
+  const url =
+    `${GRAPH_API}/${instagramAccountId}/media_publish`;
+
+  const data = await instagramRequest(
+    url,
+    accessToken,
     {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        creation_id: creationId,
-        access_token: accessToken,
-      }),
+      creation_id: creationId,
     }
   );
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error?.message || "Unable to publish media.");
+  if (!data.id) {
+    throw new Error(
+      "Instagram did not return a published media ID."
+    );
   }
+
+  console.log(
+    "Instagram media published:",
+    data.id
+  );
 
   return data.id;
 }
@@ -64,18 +111,47 @@ export async function publishInstagramImage(
   imageUrl: string,
   caption: string
 ) {
-  const creationId = await createMediaContainer(
-    instagramAccountId,
-    accessToken,
-    imageUrl,
-    caption
+  if (!instagramAccountId) {
+    throw new Error(
+      "Instagram account ID is required."
+    );
+  }
+
+  if (!accessToken) {
+    throw new Error(
+      "Instagram access token is required."
+    );
+  }
+
+  if (!imageUrl) {
+    throw new Error(
+      "Image URL is required."
+    );
+  }
+
+  console.log(
+    "Publishing Instagram image..."
   );
 
-  const mediaId = await publishMedia(
-    instagramAccountId,
-    accessToken,
-    creationId
+  console.log(
+    "Instagram Account ID:",
+    instagramAccountId
   );
+
+  const creationId =
+    await createMediaContainer(
+      instagramAccountId,
+      accessToken,
+      imageUrl,
+      caption
+    );
+
+  const mediaId =
+    await publishMedia(
+      instagramAccountId,
+      accessToken,
+      creationId
+    );
 
   return mediaId;
 }
