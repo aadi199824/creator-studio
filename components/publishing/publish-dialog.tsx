@@ -15,6 +15,7 @@ const supabase = createClient();
 interface InstagramAccount {
   id: string;
   username: string;
+  account_id?: string;
   profile_picture?: string | null;
   is_active?: boolean;
 }
@@ -23,13 +24,20 @@ export function PublishDialog() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  /**
-   * Account selected from sidebar.
+  /*
+   * Support both:
    *
-   * Example:
-   * /dashboard/publishing?account=ACCOUNT_ID
+   * /dashboard/publishing?account_id=DATABASE_ID
+   *
+   * and the older:
+   *
+   * /dashboard/publishing?account=DATABASE_ID
+   *
+   * This keeps the existing flow compatible.
    */
-  const requestedAccount = searchParams.get("account");
+  const requestedAccount =
+    searchParams.get("account_id") ||
+    searchParams.get("account");
 
   const [file, setFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState("");
@@ -40,8 +48,7 @@ export function PublishDialog() {
   const [selectedAccount, setSelectedAccount] = useState("");
 
   /**
-   * Load Instagram accounts whenever the requested
-   * account changes.
+   * Load Instagram accounts.
    */
   useEffect(() => {
     loadAccounts();
@@ -55,7 +62,9 @@ export function PublishDialog() {
       const response = await fetch("/api/instagram/accounts");
 
       if (!response.ok) {
-        throw new Error("Failed to load Instagram accounts.");
+        throw new Error(
+          "Failed to load Instagram accounts."
+        );
       }
 
       const data = await response.json();
@@ -76,25 +85,40 @@ export function PublishDialog() {
         return;
       }
 
-      /**
-       * If the sidebar supplied an account ID,
-       * select that account.
+      /*
+       * If account was selected from the sidebar,
+       * find it using either:
+       *
+       * 1. Database row ID
+       * 2. Instagram account ID
        */
       if (requestedAccount) {
-        const requestedExists =
-          instagramAccounts.some(
+        const requestedInstagramAccount =
+          instagramAccounts.find(
             (account) =>
-              account.id === requestedAccount
+              account.id === requestedAccount ||
+              account.account_id === requestedAccount
           );
 
-        if (requestedExists) {
-          setSelectedAccount(requestedAccount);
+        if (requestedInstagramAccount) {
+          /*
+           * IMPORTANT:
+           *
+           * Keep selectedAccount as account.id
+           * because the existing publish API expects
+           * the social_accounts row ID.
+           */
+          setSelectedAccount(
+            requestedInstagramAccount.id
+          );
+
           return;
         }
       }
 
-      /**
-       * Otherwise default to the first connected account.
+      /*
+       * No account requested from sidebar.
+       * Default to first connected account.
        */
       setSelectedAccount(
         instagramAccounts[0].id
@@ -214,9 +238,11 @@ export function PublishDialog() {
 
   return (
     <div className="space-y-6">
+
       {/* =========================
           IMAGE UPLOAD
       ========================== */}
+
       <ImageUpload
         onSelect={(selectedFile) =>
           setFile(selectedFile)
@@ -226,6 +252,7 @@ export function PublishDialog() {
       {/* =========================
           IMAGE PREVIEW
       ========================== */}
+
       {file && (
         <div className="rounded-lg border p-2">
           <Image
@@ -241,7 +268,9 @@ export function PublishDialog() {
       {/* =========================
           INSTAGRAM ACCOUNT
       ========================== */}
+
       <div className="space-y-2">
+
         <label className="text-sm font-medium">
           Instagram Account
         </label>
@@ -276,8 +305,10 @@ export function PublishDialog() {
         </select>
 
         {/* Selected account information */}
+
         {selectedInstagramAccount && (
           <div className="flex items-center gap-3 rounded-lg border bg-purple-50 p-3">
+
             {selectedInstagramAccount.profile_picture ? (
               <img
                 src={
@@ -313,6 +344,7 @@ export function PublishDialog() {
       {/* =========================
           CAPTION
       ========================== */}
+
       <textarea
         className="w-full rounded-lg border p-3"
         rows={6}
@@ -327,6 +359,7 @@ export function PublishDialog() {
       {/* =========================
           PUBLISH BUTTON
       ========================== */}
+
       <Button
         onClick={handlePublish}
         disabled={
@@ -353,6 +386,7 @@ export function PublishDialog() {
       {/* =========================
           UPLOADED IMAGE URL
       ========================== */}
+
       {imageUrl && (
         <div className="break-all rounded-md bg-green-50 p-3 text-sm text-green-700">
           <strong>
