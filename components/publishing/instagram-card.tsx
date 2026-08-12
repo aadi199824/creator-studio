@@ -26,6 +26,7 @@ interface InstagramAccount {
   account_name: string;
   account_id: string;
   platform: string;
+  profile_picture?: string | null;
 }
 
 export function InstagramCard() {
@@ -148,9 +149,19 @@ export function InstagramCard() {
                   className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center"
                 >
                   <div className="flex flex-1 items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                      <User className="h-6 w-6 text-muted-foreground" />
-                    </div>
+                    <div className="h-12 w-12 overflow-hidden rounded-full bg-muted">
+                        {account.profile_picture ? (
+                          <img
+                            src={account.profile_picture}
+                            alt={`@${account.account_name}`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <User className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                        )}
+                      </div>
 
                     <div>
                       <div className="flex items-center gap-2">
