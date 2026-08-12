@@ -46,6 +46,76 @@ export async function createMediaContainer(
   return data.id;
 }
 
+
+/**
+ * Wait until Instagram finishes processing the media container.
+ */
+async function waitForMediaContainer(
+  creationId: string,
+  accessToken: string,
+  maxAttempts = 10,
+  delayMs = 3000
+) {
+  console.log("===== INSTAGRAM MEDIA STATUS CHECK =====");
+  console.log("Creation ID:", creationId);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(
+      `${GRAPH_API}/${creationId}?fields=status_code,status&access_token=${encodeURIComponent(
+        accessToken
+      )}`,
+      {
+        method: "GET",
+      }
+    );
+
+    const data = await response.json();
+
+    console.log(`Status attempt ${attempt}/${maxAttempts}:`);
+    console.log("HTTP Status:", response.status);
+    console.log("Response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      throw new Error(
+        data.error?.message ||
+          data.error_message ||
+          "Unable to check Instagram media status."
+      );
+    }
+
+    const statusCode = data.status_code;
+
+    if (statusCode === "FINISHED") {
+      console.log("Instagram media is ready to publish.");
+      return;
+    }
+
+    if (statusCode === "ERROR") {
+      throw new Error(
+        data.status ||
+          "Instagram media processing failed."
+      );
+    }
+
+    if (statusCode === "EXPIRED") {
+      throw new Error(
+        "Instagram media container expired before it could be published."
+      );
+    }
+
+    console.log(
+      `Media is still processing. Waiting ${delayMs}ms...`
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  throw new Error(
+    "Instagram media is still processing after the maximum wait time."
+  );
+}
+
+
 export async function publishMedia(
   instagramAccountId: string,
   accessToken: string,
@@ -94,6 +164,7 @@ export async function publishMedia(
   return data.id;
 }
 
+
 export async function publishInstagramImage(
   instagramAccountId: string,
   accessToken: string,
@@ -104,6 +175,7 @@ export async function publishInstagramImage(
   console.log("Instagram Account ID:", instagramAccountId);
   console.log("Image URL:", imageUrl);
 
+  // 1. Create media container
   const creationId = await createMediaContainer(
     instagramAccountId,
     accessToken,
@@ -113,6 +185,13 @@ export async function publishInstagramImage(
 
   console.log("Creation ID:", creationId);
 
+  // 2. Wait for Instagram to finish processing it
+  await waitForMediaContainer(
+    creationId,
+    accessToken
+  );
+
+  // 3. Publish only after FINISHED
   const mediaId = await publishMedia(
     instagramAccountId,
     accessToken,
