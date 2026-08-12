@@ -518,7 +518,9 @@ export default function Sidebar() {
                     hover:bg-fuchsia-500/10
                   "
                 >
-                  <Instagram className="h-4 w-4 text-fuchsia-400" />
+                  <span className="text-xs font-bold text-fuchsia-400">
+                    IG
+                  </span>
                   Add Instagram Account
                 </button>
               )}
