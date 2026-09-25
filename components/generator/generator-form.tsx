@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   Sparkles,
   FileText,
@@ -17,7 +18,17 @@ import {
 import BrandSelect from "./brand-select";
 import PromptPreview from "./prompt-preview";
 
+const TABS = [
+  { id: "generate", label: "Generate" },
+  { id: "bulk", label: "Bulk Generate" },
+  { id: "image", label: "AI Image" },
+  { id: "hashtags", label: "Hashtags" },
+] as const;
+
 export default function GeneratorForm() {
+  const [activeTab, setActiveTab] =
+    useState<(typeof TABS)[number]["id"]>("generate");
+
   const [brand, setBrand] = useState("");
   const [platform, setPlatform] = useState("");
   const [contentType, setContentType] = useState("");
@@ -33,59 +44,45 @@ export default function GeneratorForm() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const supabase = createClient();
+
   const platforms = [
-  {
-    name: "Instagram",
-    icon: "◎",
-  },
-  {
-    name: "YouTube",
-    icon: "▶",
-  },
-  {
-    name: "Facebook",
-    icon: "f",
-  },
-  {
-    name: "LinkedIn",
-    icon: "in",
-  },
-  {
-    name: "X",
-    icon: "𝕏",
-  },
-];
-  const contentTypes = [
-    {
-      name: "Post",
-      icon: FileText,
-    },
-    {
-      name: "Reel",
-      label: "Reel Script",
-      icon: Clapperboard,
-    },
-    {
-      name: "Carousel",
-      icon: PanelsTopLeft,
-    },
-    {
-      name: "Story",
-      icon: BookOpen,
-    },
-    {
-      name: "Thumbnail",
-      icon: ImageIcon,
-    },
+    { name: "Instagram", icon: "◎" },
+    { name: "YouTube", icon: "▶" },
+    { name: "Facebook", icon: "f" },
+    { name: "LinkedIn", icon: "in" },
+    { name: "X", icon: "𝕏" },
   ];
 
-  async function handleGenerate(
-    e: React.FormEvent<HTMLFormElement>
-  ) {
+  const contentTypes = [
+    { name: "Post", icon: FileText },
+    { name: "Reel", label: "Reel Script", icon: Clapperboard },
+    { name: "Carousel", icon: PanelsTopLeft },
+    { name: "Story", icon: BookOpen },
+    { name: "Thumbnail", icon: ImageIcon },
+  ];
+
+  function handleTabClick(tabId: (typeof TABS)[number]["id"]) {
+    setActiveTab(tabId);
+
+    if (tabId !== "generate") {
+      toast.info("This mode is coming soon — single-post Generate is live today.");
+    }
+  }
+
+  async function handleGenerate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     if (!brand || !platform || !contentType || !tone || !topic.trim()) {
-      alert("Please fill in all fields.");
+      toast.error("Please fill in all fields.");
+      return;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      toast.error("Please sign in again to generate content.");
       return;
     }
 
@@ -94,9 +91,7 @@ export default function GeneratorForm() {
       "SEO friendly",
       addCTA ? "Include a clear CTA" : "",
       includeHashtags ? "Include relevant trending hashtags" : "",
-      includeImageSuggestion
-        ? "Include an image/visual suggestion"
-        : "",
+      includeImageSuggestion ? "Include an image/visual suggestion" : "",
     ]
       .filter(Boolean)
       .map((item) => `- ${item}`)
@@ -125,6 +120,7 @@ ${requirements}
       const { data, error } = await supabase
         .from("ai_generations")
         .insert({
+          user_id: user.id,
           brand_id: brand,
           platform,
           content_type: contentType,
@@ -138,37 +134,29 @@ ${requirements}
 
       if (error) {
         console.error("Supabase Insert Error:", error);
-        alert("Failed to save prompt.");
+        toast.error("Failed to save prompt.");
         return;
       }
 
       const response = await fetch("/api/ai/generate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          generationId: data.id,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ generationId: data.id }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
         console.error("AI Generation Error:", result);
-        alert(result.error || "Failed to generate content.");
+        toast.error(result.error || "Failed to generate content.");
         return;
       }
 
       setGeneratedContent(result.content);
-
-      console.log("Generated Content:", result.content);
     } catch (err: any) {
       console.error("Generation Error:", err);
-
-      alert(
-        err?.message ||
-          "Something went wrong while generating content."
+      toast.error(
+        err?.message || "Something went wrong while generating content."
       );
     } finally {
       setIsGenerating(false);
@@ -215,50 +203,31 @@ ${requirements}
 
           {/* Tabs */}
           <div className="mt-6 flex gap-7 overflow-x-auto text-sm font-medium">
-            <button
-              type="button"
-              className="border-b-2 border-purple-600 px-1 pb-3 font-semibold text-purple-600"
-            >
-              Generate
-            </button>
-
-            <button
-              type="button"
-              className="px-1 pb-3 text-slate-500 transition hover:text-slate-900"
-            >
-              Bulk Generate
-            </button>
-
-            <button
-              type="button"
-              className="px-1 pb-3 text-slate-500 transition hover:text-slate-900"
-            >
-              AI Image
-            </button>
-
-            <button
-              type="button"
-              className="px-1 pb-3 text-slate-500 transition hover:text-slate-900"
-            >
-              Hashtags
-            </button>
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleTabClick(tab.id)}
+                className={
+                  activeTab === tab.id
+                    ? "border-b-2 border-purple-600 px-1 pb-3 font-semibold text-purple-600"
+                    : "px-1 pb-3 text-slate-500 transition hover:text-slate-900"
+                }
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        <form
-          onSubmit={handleGenerate}
-          className="space-y-5 p-6"
-        >
+        <form onSubmit={handleGenerate} className="space-y-5 p-6">
           {/* Brand */}
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-800">
               Select Brand
             </label>
 
-            <BrandSelect
-              value={brand}
-              onChange={setBrand}
-            />
+            <BrandSelect value={brand} onChange={setBrand} />
           </div>
 
           {/* Platform */}
@@ -268,36 +237,27 @@ ${requirements}
             </label>
 
             <div className="flex flex-wrap gap-2">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-800">
-                  Platform
-                </label>
+              {platforms.map((item) => {
+                const active = platform === item.name;
 
-                <div className="flex flex-wrap gap-2">
-                  {platforms.map((item) => {
-                    const active = platform === item.name;
-
-                    return (
-                      <button
-                        key={item.name}
-                        type="button"
-                        onClick={() => setPlatform(item.name)}
-                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                          active
-                            ? "border-purple-600 bg-purple-50 text-purple-700 ring-1 ring-purple-600"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-purple-300 hover:bg-purple-50/40"
-                        }`}
-                      >
-                        <span className="flex h-4 min-w-4 items-center justify-center text-xs font-bold">
-                          {item.icon}
-                        </span>
-
-                        {item.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                return (
+                  <button
+                    key={item.name}
+                    type="button"
+                    onClick={() => setPlatform(item.name)}
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                      active
+                        ? "border-purple-600 bg-purple-50 text-purple-700 ring-1 ring-purple-600"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-purple-300 hover:bg-purple-50/40"
+                    }`}
+                  >
+                    <span className="flex h-4 min-w-4 items-center justify-center text-xs font-bold">
+                      {item.icon}
+                    </span>
+                    {item.name}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -324,7 +284,6 @@ ${requirements}
                     }`}
                   >
                     <Icon className="h-4 w-4" />
-                      
                     {item.label || item.name}
                   </button>
                 );
@@ -345,18 +304,10 @@ ${requirements}
               required
             >
               <option value="">Select tone / style</option>
-              <option value="Professional">
-                💼 Professional
-              </option>
-              <option value="Funny">
-                😄 Funny & Engaging
-              </option>
-              <option value="Motivational">
-                🔥 Motivational
-              </option>
-              <option value="Devotional">
-                🙏 Devotional & Motivational
-              </option>
+              <option value="Professional">💼 Professional</option>
+              <option value="Funny">😄 Funny &amp; Engaging</option>
+              <option value="Motivational">🔥 Motivational</option>
+              <option value="Devotional">🙏 Devotional &amp; Motivational</option>
             </select>
           </div>
 
@@ -387,9 +338,7 @@ ${requirements}
             <OptionCheckbox
               label="Include Hashtags"
               checked={includeHashtags}
-              onChange={() =>
-                setIncludeHashtags(!includeHashtags)
-              }
+              onChange={() => setIncludeHashtags(!includeHashtags)}
             />
 
             <OptionCheckbox
@@ -402,9 +351,7 @@ ${requirements}
               label="Include Image Suggestion"
               checked={includeImageSuggestion}
               onChange={() =>
-                setIncludeImageSuggestion(
-                  !includeImageSuggestion
-                )
+                setIncludeImageSuggestion(!includeImageSuggestion)
               }
             />
           </div>
@@ -413,6 +360,9 @@ ${requirements}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
             <button
               type="button"
+              onClick={() =>
+                toast.info("Advanced options are coming soon.")
+              }
               className="text-sm font-medium text-slate-500 transition hover:text-purple-600"
             >
               Advanced Options ↓
@@ -435,10 +385,7 @@ ${requirements}
                 className="flex h-11 min-w-[165px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-pink-500 px-5 text-sm font-semibold text-white shadow-md shadow-purple-200 transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <WandSparkles className="h-4 w-4" />
-
-                {isGenerating
-                  ? "Generating..."
-                  : "Generate with AI"}
+                {isGenerating ? "Generating..." : "Generate with AI"}
               </button>
             </div>
           </div>
@@ -467,10 +414,7 @@ ${requirements}
             </div>
           </div>
         ) : generatedContent ? (
-          <PromptPreview
-            prompt={generatedContent}
-            onChange={setGeneratedContent}
-          />
+          <PromptPreview prompt={generatedContent} onChange={setGeneratedContent} />
         ) : (
           <div className="flex min-h-[450px] items-center justify-center rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
             <div className="max-w-sm text-center">
@@ -483,9 +427,8 @@ ${requirements}
               </h3>
 
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                Select your brand, platform and content
-                preferences, then generate your first piece
-                of AI content.
+                Select your brand, platform and content preferences, then
+                generate your first piece of AI content.
               </p>
             </div>
           </div>
@@ -512,16 +455,11 @@ function OptionCheckbox({
     >
       <span
         className={`flex h-4 w-4 items-center justify-center rounded ${
-          checked
-            ? "bg-purple-600"
-            : "border border-slate-300 bg-white"
+          checked ? "bg-purple-600" : "border border-slate-300 bg-white"
         }`}
       >
-        {checked && (
-          <Check className="h-3 w-3 text-white" />
-        )}
+        {checked && <Check className="h-3 w-3 text-white" />}
       </span>
-
       {label}
     </button>
   );

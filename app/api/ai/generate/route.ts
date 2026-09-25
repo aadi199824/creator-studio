@@ -2,12 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { AIService } from "@/lib/services/ai.service";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-export async function GET() {
-  return NextResponse.json({
-    message: "AI Generate API is working!",
-  });
-}
-
 export async function POST(request: NextRequest) {
   try {
     const { generationId } = await request.json();
@@ -21,11 +15,24 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createServerSupabaseClient();
 
-    // Get generation record
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // Get generation record — scoped to the requesting user so nobody can
+    // trigger generation against, or read, another user's draft.
     const { data: generation, error } = await supabase
       .from("ai_generations")
       .select("*")
       .eq("id", generationId)
+      .eq("user_id", user.id)
       .single();
 
     if (error || !generation) {
@@ -36,9 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate AI content
-    const content = await AIService.generateContent(
-      generation.prompt
-    );
+    const content = await AIService.generateContent(generation.prompt);
 
     // Save generated content
     const { error: updateError } = await supabase
@@ -47,7 +52,8 @@ export async function POST(request: NextRequest) {
         generated_content: content,
         status: "completed",
       })
-      .eq("id", generationId);
+      .eq("id", generationId)
+      .eq("user_id", user.id);
 
     if (updateError) {
       throw updateError;
@@ -58,15 +64,15 @@ export async function POST(request: NextRequest) {
       content,
     });
   } catch (error: any) {
-    console.error(error);
+    console.error("AI generate error:", error);
 
     return NextResponse.json(
       {
-        error: error.message,
+        error:
+          error?.message ||
+          "We couldn't generate this content. Please try again.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }

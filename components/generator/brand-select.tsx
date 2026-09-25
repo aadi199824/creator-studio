@@ -1,12 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-
-interface Brand {
-  id: string;
-  name: string;
-}
+import { BrandService } from "@/lib/services/brand.service";
+import { Brand } from "@/lib/types/brand";
 
 interface Props {
   value: string;
@@ -14,19 +10,12 @@ interface Props {
 }
 
 export default function BrandSelect({ value, onChange }: Props) {
-  const supabase = createClient();
   const [brands, setBrands] = useState<Brand[]>([]);
 
   useEffect(() => {
     async function fetchBrands() {
-      const { data, error } = await supabase
-        .from("brands")
-        .select("id, name")
-        .order("name");
-
-      if (!error && data) {
-        setBrands(data);
-      }
+      const { data } = await BrandService.getAll();
+      setBrands(data ?? []);
     }
 
     fetchBrands();
@@ -36,15 +25,22 @@ export default function BrandSelect({ value, onChange }: Props) {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-lg border p-3"
+      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
     >
       <option value="">Select Brand</option>
 
       {brands.map((brand) => (
         <option key={brand.id} value={brand.id}>
+          {brand.icon ? `${brand.icon} ` : ""}
           {brand.name}
         </option>
       ))}
+
+      {brands.length === 0 && (
+        <option value="" disabled>
+          No brands yet — create one first
+        </option>
+      )}
     </select>
   );
 }

@@ -4,12 +4,19 @@ const supabase = createClient();
 
 export class SocialService {
   static async getAccounts() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { data: [], error: new Error("Not authenticated") };
+    }
+
     return await supabase
       .from("social_accounts")
       .select("*")
-      .order("created_at", {
-        ascending: false,
-      });
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
   }
 
   static async saveAccount(data: {
@@ -21,15 +28,22 @@ export class SocialService {
   }) {
     return await supabase
       .from("social_accounts")
-      .upsert(data, {
-        onConflict: "account_id",
-      });
+      .upsert(data, { onConflict: "account_id" });
   }
 
   static async disconnect(id: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { error: new Error("Not authenticated") };
+    }
+
     return await supabase
       .from("social_accounts")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", user.id);
   }
 }

@@ -1,51 +1,67 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ConnectButton } from "@/components/publishing/connect-button";
+import { InstagramAvatar } from "@/components/instagram/instagram-avatar";
+import { SocialService } from "@/lib/services/social.service";
 
 interface Account {
   id: string;
   username: string;
-  profile_picture?: string;
+  profile_picture?: string | null;
   is_active: boolean;
+  auth_provider?: "facebook_graph" | "instagram_direct";
 }
 
 export default function InstagramAccounts() {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadAccounts();
   }, []);
 
   async function loadAccounts() {
-    const res = await fetch("/api/instagram/accounts");
-    const data = await res.json();
+    setLoading(true);
 
-    if (data.accounts) {
-      setAccounts(data.accounts);
+    try {
+      const res = await fetch("/api/instagram/accounts", { cache: "no-store" });
+      const data = await res.json();
+      setAccounts(data.accounts ?? []);
+    } finally {
+      setLoading(false);
     }
   }
 
-  function connectInstagram() {
-    window.location.href = "/api/instagram/connect";
+  async function handleDisconnect(id: string) {
+    const { error } = await SocialService.disconnect(id);
+
+    if (error) {
+      toast.error("Failed to disconnect account.");
+      return;
+    }
+
+    toast.success("Instagram account disconnected.");
+    setAccounts((prev) => prev.filter((a) => a.id !== id));
   }
 
   return (
     <div className="rounded-xl border bg-white p-6">
-
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">
-          Connected Accounts
-        </h2>
-
-        <button
-          onClick={connectInstagram}
-          className="rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700"
-        >
-          + Connect Instagram
-        </button>
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Connected Accounts</h2>
+        <ConnectButton />
       </div>
 
-      {accounts.length === 0 ? (
+      {loading ? (
+        <div className="space-y-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-16 animate-pulse rounded-lg bg-slate-100" />
+          ))}
+        </div>
+      ) : accounts.length === 0 ? (
         <div className="rounded-lg border border-dashed p-10 text-center text-slate-500">
           No Instagram account connected.
         </div>
@@ -57,40 +73,46 @@ export default function InstagramAccounts() {
               className="flex items-center justify-between rounded-lg border p-4"
             >
               <div className="flex items-center gap-4">
-
-                {account.profile_picture ? (
-                  <img
-                    src={account.profile_picture}
-                    alt={`@${account.username}`}
-                    className="h-12 w-12 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-lg font-semibold text-slate-600">
-                    {account.username?.charAt(0).toUpperCase()}
-                  </div>
-                )}
+                <InstagramAvatar
+                  src={account.profile_picture}
+                  username={account.username}
+                  className="h-12 w-12"
+                  fallbackClassName="text-lg"
+                />
 
                 <div>
-                  <div className="font-semibold">
+                  <div className="flex items-center gap-2 font-semibold">
                     @{account.username}
+                    <Badge variant="outline" className="text-[10px] font-normal">
+                      {account.auth_provider === "facebook_graph"
+                        ? "Facebook Page"
+                        : "Direct Login"}
+                    </Badge>
                   </div>
 
-                  <div className="text-sm text-green-600">
-                    Connected
+                  <div
+                    className={`text-sm ${
+                      account.is_active === false
+                        ? "text-amber-600"
+                        : "text-green-600"
+                    }`}
+                  >
+                    {account.is_active === false ? "Expired" : "Connected"}
                   </div>
                 </div>
               </div>
 
-              <button
-                className="rounded-lg border px-3 py-2 hover:bg-red-50"
+              <Button
+                variant="outline"
+                onClick={() => handleDisconnect(account.id)}
+                className="hover:bg-red-50"
               >
                 Disconnect
-              </button>
+              </Button>
             </div>
           ))}
         </div>
       )}
-
     </div>
   );
 }
