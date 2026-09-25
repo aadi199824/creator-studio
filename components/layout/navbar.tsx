@@ -47,14 +47,16 @@ export default function Navbar({ email }: { email?: string }) {
         </button>
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 font-semibold text-white"
-            >
-              {initial}
-            </button>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            render={
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 font-semibold text-white"
+              >
+                {initial}
+              </button>
+            }
+          />
 
           <DropdownMenuContent align="end">
             <DropdownMenuLabel className="truncate">

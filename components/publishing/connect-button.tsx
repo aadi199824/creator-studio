@@ -25,12 +25,14 @@ export function ConnectButton() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button disabled={loading} size="lg" className="w-full sm:w-auto">
-          <Link2 className="mr-2 h-4 w-4" />
-          {loading ? "Connecting..." : "Connect Instagram"}
-        </Button>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger
+        render={
+          <Button disabled={loading} size="lg" className="w-full sm:w-auto">
+            <Link2 className="mr-2 h-4 w-4" />
+            {loading ? "Connecting..." : "Connect Instagram"}
+          </Button>
+        }
+      />
 
       <DropdownMenuContent align="start" className="w-72">
         {INSTAGRAM_PROVIDERS.map((provider) => (

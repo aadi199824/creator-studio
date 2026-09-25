@@ -8,14 +8,14 @@
 // dynamic-route URL, rename the "id" folder to "[id]" yourself and this
 // page can be simplified to read `params.id`.
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import BrandForm from "@/components/brands/brand-form";
 import { BrandService } from "@/lib/services/brand.service";
 import { Brand } from "@/lib/types/brand";
 
-export default function EditBrandPage() {
+function EditBrandPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
@@ -67,5 +67,13 @@ export default function EditBrandPage() {
       <h1 className="text-3xl font-bold">Edit Brand</h1>
       <BrandForm brand={brand} />
     </main>
+  );
+}
+
+export default function EditBrandPage() {
+  return (
+    <Suspense fallback={<p className="text-muted-foreground">Loading...</p>}>
+      <EditBrandPageInner />
+    </Suspense>
   );
 }
