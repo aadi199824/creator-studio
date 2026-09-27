@@ -16,6 +16,10 @@ export function verifyAutomationSecret(request: Request): boolean {
   return Boolean(expected) && provided === expected;
 }
 
+function normalizeForMatch(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 export async function findAccountByInstagramUsername(username: string) {
   const supabase = createAdminSupabaseClient();
   const normalized = username.replace(/^@/, "").trim();
@@ -35,25 +39,31 @@ export async function findAccountByInstagramUsername(username: string) {
   // Best-effort brand match — brands are optional, so we don't fail the
   // whole draft if nothing matches.
   //
-  // ROOT CAUSE (fixed here): this used to ILIKE the brand name against the
-  // raw handle (e.g. "tradeverse.academy"). A human-readable brand name
-  // like "TradeVerse Academy" has a space where the handle has a literal
-  // "." — and "." is not a SQL wildcard, so that pattern could never match.
-  // "csp_officials" happened to work by accident, because "_" IS a Postgres
-  // ILIKE single-character wildcard, but that's a coincidence, not a real
-  // matching strategy. Fix: collapse any run of non-alphanumeric characters
-  // in the handle into a "%" wildcard before matching, so punctuation
-  // differences between the handle and the brand name (dot, underscore,
-  // space, etc.) don't matter.
-  const brandPattern = `%${normalized.replace(/[^a-zA-Z0-9]+/g, "%")}%`;
-
-  const { data: brand } = await supabase
+  // ROOT CAUSE HISTORY: a first attempt ILIKE'd the brand name against a
+  // wildcard built from the handle (e.g. "csp%officials"), assuming the
+  // brand name would be a longer, fuller version of the handle. Real brand
+  // names are often SHORTER than the handle (e.g. brand "CSP" for handle
+  // "csp_officials"), so that pattern still failed to match. Fixed by
+  // fetching this user's brands and checking containment in both
+  // directions on normalized (lowercased, alphanumeric-only) strings —
+  // matches whether the brand name is a prefix/substring of the handle, or
+  // vice versa.
+  const { data: brands } = await supabase
     .from("brands")
-    .select("id")
-    .eq("user_id", account.user_id)
-    .ilike("name", brandPattern)
-    .limit(1)
-    .maybeSingle();
+    .select("id, name")
+    .eq("user_id", account.user_id);
 
-  return { account, brandId: brand?.id ?? null, error: null };
+  const normalizedUsername = normalizeForMatch(normalized);
+
+  const matchedBrand = (brands ?? []).find((brand) => {
+    const normalizedBrandName = normalizeForMatch(brand.name);
+
+    return (
+      normalizedBrandName.length > 0 &&
+      (normalizedUsername.includes(normalizedBrandName) ||
+        normalizedBrandName.includes(normalizedUsername))
+    );
+  });
+
+  return { account, brandId: matchedBrand?.id ?? null, error: null };
 }
