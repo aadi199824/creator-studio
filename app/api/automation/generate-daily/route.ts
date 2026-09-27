@@ -269,6 +269,10 @@ async function generateForAccount(username: string) {
 
   let imageUrl: string | null = null;
   let imageNote = "";
+  // Non-secret debug field surfaced in the response (never silently
+  // swallowed) so a failed image generation is visible without needing to
+  // dig through Vercel logs.
+  let imageError: string | null = null;
 
   try {
     const { bytes, mimeType } = await AIService.generateImage(
@@ -290,7 +294,7 @@ async function generateForAccount(username: string) {
       });
 
     if (uploadError) {
-      throw uploadError;
+      throw new Error(`Supabase Storage upload failed: ${uploadError.message}`);
     }
 
     const { data: publicUrlData } = supabase.storage
@@ -299,9 +303,11 @@ async function generateForAccount(username: string) {
 
     imageUrl = publicUrlData.publicUrl;
   } catch (error) {
+    imageError = error instanceof Error ? error.message : String(error);
+
     console.error(
       `Image generation failed for ${username}:`,
-      error
+      imageError
     );
 
     imageNote =
@@ -345,6 +351,8 @@ async function generateForAccount(username: string) {
     id: draft.id,
     topic: post.topic,
     image_url: imageUrl,
+    brand_id: brandId,
+    image_error: imageError,
   };
 }
 

@@ -34,11 +34,24 @@ export async function findAccountByInstagramUsername(username: string) {
 
   // Best-effort brand match — brands are optional, so we don't fail the
   // whole draft if nothing matches.
+  //
+  // ROOT CAUSE (fixed here): this used to ILIKE the brand name against the
+  // raw handle (e.g. "tradeverse.academy"). A human-readable brand name
+  // like "TradeVerse Academy" has a space where the handle has a literal
+  // "." — and "." is not a SQL wildcard, so that pattern could never match.
+  // "csp_officials" happened to work by accident, because "_" IS a Postgres
+  // ILIKE single-character wildcard, but that's a coincidence, not a real
+  // matching strategy. Fix: collapse any run of non-alphanumeric characters
+  // in the handle into a "%" wildcard before matching, so punctuation
+  // differences between the handle and the brand name (dot, underscore,
+  // space, etc.) don't matter.
+  const brandPattern = `%${normalized.replace(/[^a-zA-Z0-9]+/g, "%")}%`;
+
   const { data: brand } = await supabase
     .from("brands")
     .select("id")
     .eq("user_id", account.user_id)
-    .ilike("name", `%${normalized}%`)
+    .ilike("name", brandPattern)
     .limit(1)
     .maybeSingle();
 

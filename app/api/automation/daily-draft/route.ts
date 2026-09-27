@@ -58,6 +58,10 @@ export async function POST(request: NextRequest) {
 
   let imageUrl: string | null = null;
   let imageNote = "";
+  // Non-secret debug field surfaced in the response (never silently
+  // swallowed) so a failed image generation is visible without needing to
+  // dig through Vercel logs.
+  let imageError: string | null = null;
 
   try {
     const { bytes, mimeType } = await AIService.generateImage(image_prompt);
@@ -69,7 +73,9 @@ export async function POST(request: NextRequest) {
       .from("media")
       .upload(path, bytes, { contentType: mimeType, upsert: true });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      throw new Error(`Supabase Storage upload failed: ${uploadError.message}`);
+    }
 
     const { data: publicUrlData } = supabase.storage
       .from("media")
@@ -77,7 +83,8 @@ export async function POST(request: NextRequest) {
 
     imageUrl = publicUrlData.publicUrl;
   } catch (error) {
-    console.error("Daily draft image generation failed:", error);
+    imageError = error instanceof Error ? error.message : String(error);
+    console.error("Daily draft image generation failed:", imageError);
     imageNote =
       "\n\n[Automation note: image generation failed for this draft — please attach an image manually before publishing.]";
   }
@@ -119,5 +126,7 @@ export async function POST(request: NextRequest) {
     success: true,
     id: draft.id,
     image_url: imageUrl,
+    brand_id: brandId,
+    image_error: imageError,
   });
 }
