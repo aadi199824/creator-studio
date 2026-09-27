@@ -26,8 +26,6 @@ async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
     } catch (error) {
       lastError = error;
 
-      // Only retry temporary availability errors.
-      // Do not retry authentication/configuration errors such as 401.
       if (!isRetryableError(error) || attempt === MAX_RETRIES - 1) {
         throw error;
       }
@@ -71,12 +69,10 @@ export class AIService {
       }
 
       const mimeType = image.mime_type || "image/png";
-      const extension = mimeType.includes("jpeg") ? "jpg" : "png";
 
       return {
-        buffer: Buffer.from(image.data, "base64"),
+        bytes: Buffer.from(image.data, "base64"),
         mimeType,
-        extension,
       };
     });
   }
