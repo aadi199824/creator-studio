@@ -10,6 +10,9 @@ export interface Content {
   prompt: string;
 
   generated_content: string | null;
+  image_url?: string | null;
+  social_account_id?: string | null;
+  publish_error?: string | null;
 
   status: string;
 

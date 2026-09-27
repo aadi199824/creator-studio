@@ -330,6 +330,7 @@ async function generateForAccount(username: string) {
     .insert({
       user_id: account.user_id,
       brand_id: brandId,
+      social_account_id: account.id,
       platform: "instagram",
       content_type: post.content_type,
       tone: post.tone,

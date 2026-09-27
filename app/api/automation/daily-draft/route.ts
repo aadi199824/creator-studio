@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
     .insert({
       user_id: account.user_id,
       brand_id: brandId,
+      social_account_id: account.id,
       platform: "instagram",
       content_type,
       tone,

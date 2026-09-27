@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { toast } from "sonner";
 import DeleteDialog from "./delete-dialog";
 import { Content } from "@/lib/types/content";
@@ -8,6 +11,7 @@ interface Props {
   onDelete: (id: string) => void;
   onDuplicate: (item: Content) => void;
   onSchedule: (item: Content) => void;
+  onPublish: (item: Content) => Promise<void>;
 }
 
 export default function ContentCard({
@@ -16,7 +20,10 @@ export default function ContentCard({
   onDelete,
   onDuplicate,
   onSchedule,
+  onPublish,
 }: Props) {
+  const [publishing, setPublishing] = useState(false);
+
   const createdDate = new Date(
     item.created_at
   ).toLocaleDateString("en-IN", {
@@ -35,6 +42,18 @@ export default function ContentCard({
 
     toast.success("Content copied to clipboard.");
   }
+
+  async function handlePublish() {
+    setPublishing(true);
+
+    try {
+      await onPublish(item);
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  const alreadyPublished = item.status === "published";
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
@@ -71,6 +90,8 @@ export default function ContentCard({
                 ? "bg-green-100 text-green-700"
                 : item.status === "scheduled"
                 ? "bg-blue-100 text-blue-700"
+                : item.status === "failed"
+                ? "bg-red-100 text-red-700"
                 : "bg-gray-100 text-gray-700"
             }`}
           >
@@ -95,6 +116,12 @@ export default function ContentCard({
               : item.generated_content || item.prompt}
           </p>
         </div>
+
+        {item.status === "failed" && item.publish_error && (
+          <p className="mt-2 text-sm text-red-600">
+            ⚠ {item.publish_error}
+          </p>
+        )}
       </div>
 
       {/* Footer */}
@@ -135,6 +162,16 @@ export default function ContentCard({
             >
               📅 Schedule
             </button>
+
+            {!alreadyPublished && (
+              <button
+                onClick={handlePublish}
+                disabled={publishing}
+                className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50"
+              >
+                {publishing ? "Publishing..." : "🚀 Publish Now"}
+              </button>
+            )}
 
           <DeleteDialog
   topic={item.topic}

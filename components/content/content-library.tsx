@@ -46,6 +46,25 @@ async function fetchGenerations() {
   setLoading(false);
 }
 
+async function handlePublish(item: Content) {
+  const response = await fetch(`/api/content/${item.id}/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    toast.error(data?.error || "Failed to publish to Instagram.");
+    fetchGenerations();
+    return;
+  }
+
+  toast.success("Published to Instagram!");
+  fetchGenerations();
+}
+
 async function handleDelete(id: string) {
   const { error } = await ContentService.delete(id);
 
@@ -191,6 +210,7 @@ return (
             onDelete={handleDelete}
             onDuplicate={handleDuplicate}
             onSchedule={handleSchedule}
+            onPublish={handlePublish}
           />
         ))}
       </div>
