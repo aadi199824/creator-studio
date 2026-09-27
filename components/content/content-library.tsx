@@ -46,11 +46,11 @@ async function fetchGenerations() {
   setLoading(false);
 }
 
-async function handlePublish(item: Content) {
+async function handlePublish(item: Content, accountId?: string) {
   const response = await fetch(`/api/content/${item.id}/publish`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
+    body: JSON.stringify(accountId ? { accountId } : {}),
   });
 
   const data = await response.json().catch(() => ({}));

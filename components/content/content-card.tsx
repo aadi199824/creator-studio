@@ -5,13 +5,19 @@ import { toast } from "sonner";
 import DeleteDialog from "./delete-dialog";
 import { Content } from "@/lib/types/content";
 
+interface InstagramAccountOption {
+  id: string;
+  username: string | null;
+  is_active: boolean;
+}
+
 interface Props {
   item: Content;
   onEdit: (item: Content) => void;
   onDelete: (id: string) => void;
   onDuplicate: (item: Content) => void;
   onSchedule: (item: Content) => void;
-  onPublish: (item: Content) => Promise<void>;
+  onPublish: (item: Content, accountId?: string) => Promise<void>;
 }
 
 export default function ContentCard({
@@ -23,6 +29,10 @@ export default function ContentCard({
   onPublish,
 }: Props) {
   const [publishing, setPublishing] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [accounts, setAccounts] = useState<InstagramAccountOption[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState("");
 
   const createdDate = new Date(
     item.created_at
@@ -43,14 +53,57 @@ export default function ContentCard({
     toast.success("Content copied to clipboard.");
   }
 
-  async function handlePublish() {
+  async function runPublish(accountId?: string) {
     setPublishing(true);
 
     try {
-      await onPublish(item);
+      await onPublish(item, accountId);
+      setPickerOpen(false);
+      setSelectedAccountId("");
     } finally {
       setPublishing(false);
     }
+  }
+
+  async function handlePublishClick() {
+    // Automation-generated drafts already know which account they belong
+    // to — publish straight away, same as before.
+    if (item.social_account_id) {
+      await runPublish();
+      return;
+    }
+
+    // Older or manually-created drafts have no linked account yet. Ask
+    // which connected Instagram account to publish to instead of guessing.
+    setPickerOpen(true);
+    setLoadingAccounts(true);
+
+    try {
+      const response = await fetch("/api/instagram/accounts");
+      const data = await response.json().catch(() => ({ accounts: [] }));
+
+      if (!response.ok) {
+        toast.error(data?.error || "Couldn't load your connected Instagram accounts.");
+        setPickerOpen(false);
+        return;
+      }
+
+      setAccounts(data.accounts ?? []);
+    } catch {
+      toast.error("Couldn't load your connected Instagram accounts.");
+      setPickerOpen(false);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  }
+
+  function handleConfirmAccount() {
+    if (!selectedAccountId) {
+      toast.error("Choose an Instagram account first.");
+      return;
+    }
+
+    runPublish(selectedAccountId);
   }
 
   const alreadyPublished = item.status === "published";
@@ -124,6 +177,66 @@ export default function ContentCard({
         )}
       </div>
 
+      {/* Inline account picker — only shown when a draft has no account
+          attached yet and the user just clicked Publish Now. */}
+      {pickerOpen && (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <p className="mb-2 text-sm font-medium text-gray-700">
+            Which Instagram account should this publish to?
+          </p>
+
+          {loadingAccounts ? (
+            <p className="text-sm text-gray-500">Loading connected accounts...</p>
+          ) : accounts.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              No connected Instagram accounts found. Connect one from Social
+              Accounts first.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <select
+                value={selectedAccountId}
+                onChange={(e) => setSelectedAccountId(e.target.value)}
+                className="flex-1 rounded-lg border p-2 text-sm"
+              >
+                <option value="">Select an account...</option>
+                {accounts.map((account) => (
+                  <option
+                    key={account.id}
+                    value={account.id}
+                    disabled={!account.is_active}
+                  >
+                    {account.username || "Unnamed account"}
+                    {!account.is_active ? " (reconnect required)" : ""}
+                  </option>
+                ))}
+              </select>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleConfirmAccount}
+                  disabled={publishing || !selectedAccountId}
+                  className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {publishing ? "Publishing..." : "Confirm & Publish"}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setPickerOpen(false);
+                    setSelectedAccountId("");
+                  }}
+                  disabled={publishing}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium transition hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Footer */}
       <div className="mt-6 flex flex-col gap-4 border-t pt-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -163,9 +276,9 @@ export default function ContentCard({
               📅 Schedule
             </button>
 
-            {!alreadyPublished && (
+            {!alreadyPublished && !pickerOpen && (
               <button
-                onClick={handlePublish}
+                onClick={handlePublishClick}
                 disabled={publishing}
                 className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50"
               >
