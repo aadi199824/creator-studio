@@ -4,32 +4,61 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY!,
 });
 
+const MAX_RETRIES = 3;
+const RETRY_DELAYS = [2000, 5000];
+
+function isRetryableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return (
+    message.includes("503") ||
+    message.includes("UNAVAILABLE") ||
+    message.includes("Service Unavailable")
+  );
+}
+
+async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+
+      // Only retry temporary availability errors.
+      // Do not retry authentication/configuration errors such as 401.
+      if (!isRetryableError(error) || attempt === MAX_RETRIES - 1) {
+        throw error;
+      }
+
+      const delay = RETRY_DELAYS[attempt] ?? 5000;
+
+      console.warn(
+        `AI request failed with a temporary error. Retrying in ${delay}ms...`
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError;
+}
+
 export class AIService {
   static async generateContent(prompt: string) {
-    try {
+    return withRetry(async () => {
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: prompt,
       });
 
       return response.text ?? "";
-    } catch (error) {
-      console.error("Gemini Error:", error);
-      throw error;
-    }
+    });
   }
 
-  /**
-   * Generates a single image from a text prompt using Gemini's image model
-   * (gemini-2.5-flash-image, per ai.google.dev/gemini-api/docs as of this
-   * writing). Returns raw image bytes + mime type so callers can upload them
-   * wherever they need (Supabase Storage, etc.) without this service caring
-   * about storage concerns.
-   */
-  static async generateImage(
-    prompt: string
-  ): Promise<{ bytes: Buffer; mimeType: string }> {
-    try {
+  static async generateImage(prompt: string) {
+    return withRetry(async () => {
       const interaction = await ai.interactions.create({
         model: "gemini-2.5-flash-image",
         input: prompt,
@@ -38,16 +67,17 @@ export class AIService {
       const image = interaction.output_image;
 
       if (!image?.data) {
-        throw new Error("Gemini did not return an image for this prompt.");
+        throw new Error("Gemini image generation returned no image data.");
       }
 
+      const mimeType = image.mime_type || "image/png";
+      const extension = mimeType.includes("jpeg") ? "jpg" : "png";
+
       return {
-        bytes: Buffer.from(image.data, "base64"),
-        mimeType: image.mime_type || "image/png",
+        buffer: Buffer.from(image.data, "base64"),
+        mimeType,
+        extension,
       };
-    } catch (error) {
-      console.error("Gemini image generation error:", error);
-      throw error;
-    }
+    });
   }
 }
