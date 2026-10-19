@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  AUTOMATION_ACCOUNTS,
+  AutomationAccount,
+  buildAccountPrompt,
+} from "@/lib/automation/brand-profiles";
+import { buildCaptionWithHashtags } from "@/lib/instagram/caption";
 import { AIService } from "@/lib/services/ai.service";
 import {
   findAccountByInstagramUsername,
@@ -8,18 +14,23 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 export const maxDuration = 300;
 
-const ACCOUNTS = [
-  "csp_officials",
-  "tradeverse.academy",
-] as const;
+type GeneratedSlide = {
+  slide: number;
+  on_image_text: string;
+  visual: string;
+  image_prompt: string;
+};
 
 type GeneratedPost = {
   topic: string;
   content_type: string;
   tone: string;
-  post_text: string;
+  layout: string;
+  caption: string;
+  hashtags: string[];
+  slides: GeneratedSlide[];
   image_prompt: string;
-  sources?: string[];
+  sources: string[];
 };
 
 function verifyCronSecret(request: NextRequest): boolean {
@@ -51,6 +62,12 @@ async function getRecentTopics(userId: string): Promise<string[]> {
     .filter((topic): topic is string => Boolean(topic));
 }
 
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
 function extractJson(text: string): GeneratedPost {
   const cleaned = text
     .trim()
@@ -67,189 +84,75 @@ function extractJson(text: string): GeneratedPost {
     typeof parsed.topic !== "string" ||
     typeof parsed.content_type !== "string" ||
     typeof parsed.tone !== "string" ||
-    typeof parsed.post_text !== "string" ||
-    typeof parsed.image_prompt !== "string"
+    typeof parsed.caption !== "string" ||
+    typeof parsed.image_prompt !== "string" ||
+    !Array.isArray(parsed.slides) ||
+    parsed.slides.length === 0
   ) {
-    throw new Error("Gemini returned an invalid daily-post structure.");
+    throw new Error(
+      "Gemini returned an invalid daily-post structure (expected topic, content_type, tone, caption, slides[], image_prompt)."
+    );
   }
+
+  const slides: GeneratedSlide[] = parsed.slides
+    .filter(
+      (slide: unknown): slide is Record<string, unknown> =>
+        Boolean(slide) && typeof slide === "object"
+    )
+    .map((slide: Record<string, unknown>, index: number) => ({
+      slide: typeof slide.slide === "number" ? slide.slide : index + 1,
+      on_image_text:
+        typeof slide.on_image_text === "string" ? slide.on_image_text : "",
+      visual: typeof slide.visual === "string" ? slide.visual : "",
+      image_prompt:
+        typeof slide.image_prompt === "string" ? slide.image_prompt : "",
+    }));
 
   return {
     topic: parsed.topic,
     content_type: parsed.content_type,
     tone: parsed.tone,
-    post_text: parsed.post_text,
+    layout: typeof parsed.layout === "string" ? parsed.layout : "",
+    caption: parsed.caption.trim(),
+    hashtags: asStringArray(parsed.hashtags),
+    slides,
     image_prompt: parsed.image_prompt,
-    sources: Array.isArray(parsed.sources)
-      ? parsed.sources.filter(
-          (source: unknown): source is string =>
-            typeof source === "string"
-        )
-      : [],
+    sources: asStringArray(parsed.sources),
   };
 }
 
-function buildPrompt(
-  username: string,
-  recentTopics: string[]
-): string {
-  const recentTopicsText =
-    recentTopics.length > 0
-      ? recentTopics.map((topic) => `- ${topic}`).join("\n")
-      : "- No previous topics available.";
+/**
+ * Human-readable production plan stored in ai_generations.prompt (shown in
+ * the Content Library's Edit dialog). Interim home for slide copy until a
+ * dedicated slides column + carousel publishing exist — it must NOT go into
+ * generated_content, because generated_content is what gets published as
+ * the Instagram caption.
+ */
+function buildProductionPlan(post: GeneratedPost, imageNote: string): string {
+  const slidesText = post.slides
+    .map(
+      (slide) =>
+        `--- Slide ${slide.slide} ---\n` +
+        `ON-IMAGE TEXT:\n${slide.on_image_text}\n\n` +
+        `VISUAL:\n${slide.visual}\n\n` +
+        `IMAGE PROMPT (paste into ChatGPT / GPT-image):\n${slide.image_prompt}`
+    )
+    .join("\n\n");
 
-  if (username === "csp_officials") {
-    return `
-You are the content strategist for the Instagram account @csp_officials.
-
-ACCOUNT POSITIONING:
-Professional career and government-exam content for aspirants, working professionals,
-and corporate employees.
-
-The account is NOT a generic government-job-news spam account.
-
-CONTENT STYLE:
-- Professional
-- Credible
-- Useful
-- Concise
-- Career-focused
-- Information-first
-
-PREFERRED TOPICS:
-- Government recruitment updates
-- PSU opportunities
-- Competitive examinations
-- Official notifications
-- Application dates
-- Eligibility
-- Preparation guidance
-- Career opportunities
-- Exam strategy
-- Important official changes
-
-CRITICAL FACTUAL RULE:
-Never invent vacancies, dates, eligibility, age limits, salary, deadlines,
-exam dates, selection processes, qualification requirements, or other recruitment facts.
-
-For current/recent recruitment information, use reliable official government,
-PSU, examination-body, or recruitment-authority sources whenever possible.
-
-If current information cannot be reliably verified, choose an evergreen educational
-or preparation topic instead of inventing current facts.
-
-CONTENT STRUCTURE:
-Hook → important information → key details → who it matters to →
-practical takeaway → CTA.
-
-VISUAL STYLE:
-Professional Indian career/education.
-Clean corporate-academic.
-Modern and trustworthy.
-Portrait 4:5.
-Do not create fake government documents, fake certificates, fake screenshots,
-or fake official logos.
-
-RECENT TOPICS:
-${recentTopicsText}
-
-Do not repeat a recent topic unless there is a clearly different educational angle.
-
-Return ONLY valid JSON using exactly this structure:
-
-{
-  "topic": "short topic name",
-  "content_type": "carousel",
-  "tone": "professional",
-  "post_text": "complete Instagram-ready post",
-  "image_prompt": "complete image-generation prompt",
-  "sources": ["official source URL 1", "official source URL 2"]
-}
-`;
-  }
-
-  return `
-You are the content strategist for @tradeverse.academy.
-
-ACCOUNT PURPOSE:
-A structured 30-day trading education journey.
-
-This is NOT random disconnected trading content.
-
-The content should continue logically from previous lessons and avoid repeating
-topics unless revision or an advanced explanation is intentional.
-
-STYLE:
-- Teacher/mentor
-- Simple
-- Practical
-- Beginner-friendly
-- Structured
-- Educational
-
-EXPLAIN:
-- What the concept is
-- Why it matters
-- How it works
-- A practical example
-- Common mistakes
-- A practical rule/checklist
-- Key takeaway
-
-FORMAT:
-Prefer an educational Instagram carousel.
-Typical structure:
-1. Hook
-2. Concept
-3. Explanation
-4. Example
-5. Common mistake
-6. Practical rule/checklist
-7. Key takeaway
-8. Save/follow CTA
-
-SAFETY:
-Never promise guaranteed profit.
-Never claim 100% accuracy.
-Never claim guaranteed income.
-Never claim risk-free trading.
-Do not provide personalized buy/sell recommendations.
-Examples must be educational.
-Include an appropriate educational/risk disclaimer where useful.
-
-VISUAL STYLE:
-Premium trading education.
-Modern financial aesthetic.
-Analytical.
-Clean and professional.
-Charts, notebook, calculator, candlesticks, market structure,
-or risk-management diagrams are appropriate.
-
-Avoid:
-- Luxury cars
-- Cash piles
-- Fake P&L screenshots
-- Get-rich-quick imagery
-
-RECENT TOPICS:
-${recentTopicsText}
-
-Continue the learning journey logically from these topics.
-Do not simply repeat one of them.
-
-Return ONLY valid JSON using exactly this structure:
-
-{
-  "topic": "short topic name",
-  "content_type": "carousel",
-  "tone": "educational",
-  "post_text": "complete Instagram-ready carousel content and caption",
-  "image_prompt": "complete image-generation prompt",
-  "sources": []
-}
-`;
+  return [
+    `PRODUCTION PLAN — ${post.topic}`,
+    `Format: ${post.content_type}${post.layout ? ` | Layout: ${post.layout}` : ""} | Slides: ${post.slides.length}`,
+    imageNote,
+    slidesText,
+    post.sources.length > 0
+      ? `Sources:\n${post.sources.map((source) => `- ${source}`).join("\n")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
-async function generateForAccount(username: string) {
+async function generateForAccount(username: AutomationAccount) {
   const { account, brandId, error } =
     await findAccountByInstagramUsername(username);
 
@@ -261,7 +164,7 @@ async function generateForAccount(username: string) {
 
   const recentTopics = await getRecentTopics(account.user_id);
 
-  const prompt = buildPrompt(username, recentTopics);
+  const prompt = buildAccountPrompt(username, recentTopics);
 
   const generated = await AIService.generateContent(prompt);
 
@@ -311,17 +214,14 @@ async function generateForAccount(username: string) {
     );
 
     imageNote =
-      "\n\n[Automation note: image generation failed. Please attach an image manually before publishing.]";
+      "[Automation note: automatic image generation failed. Create the slides from the image prompts below and attach them before publishing.]";
   }
 
-  const generatedContent =
-    post.post_text +
-    imageNote +
-    (post.sources && post.sources.length > 0
-      ? `\n\nSources:\n${post.sources
-          .map((source) => `- ${source}`)
-          .join("\n")}`
-      : "");
+  // generated_content is published verbatim as the Instagram caption, so it
+  // holds ONLY the caption + hashtags. Slide copy, image prompts, sources and
+  // automation notes go into the production plan instead.
+  const generatedContent = buildCaptionWithHashtags(post.caption, post.hashtags);
+  const productionPlan = buildProductionPlan(post, imageNote);
 
   const supabase = createAdminSupabaseClient();
 
@@ -335,7 +235,7 @@ async function generateForAccount(username: string) {
       content_type: post.content_type,
       tone: post.tone,
       topic: post.topic,
-      prompt: prompt,
+      prompt: productionPlan,
       generated_content: generatedContent,
       image_url: imageUrl,
       status: "draft",
@@ -368,7 +268,7 @@ export async function GET(request: NextRequest) {
   const results = [];
   const errors = [];
 
-  for (const username of ACCOUNTS) {
+  for (const username of AUTOMATION_ACCOUNTS) {
     try {
       const result = await generateForAccount(username);
       results.push(result);
