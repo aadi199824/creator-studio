@@ -205,23 +205,58 @@ export async function composeOn(
 
 // --- brand ------------------------------------------------------------------------
 
-/** CSP badge bottom-left + handle bottom-right, on every format. */
+const LOGO_FILE = path.join(process.cwd(), "public/brand/csp-logo.jpg");
+const LOGO_SIZE = 84;
+let logoPromise: Promise<Buffer | null> | null = null;
+
+/** The CSP logo cropped to a circle with a thin white ring (null if the file is missing). */
+function loadLogo(): Promise<Buffer | null> {
+  logoPromise ??= (async () => {
+    try {
+      const mask = svg(LOGO_SIZE, LOGO_SIZE, `<circle cx="${LOGO_SIZE / 2}" cy="${LOGO_SIZE / 2}" r="${LOGO_SIZE / 2}" fill="#fff"/>`);
+      const ring = svg(
+        LOGO_SIZE,
+        LOGO_SIZE,
+        `<circle cx="${LOGO_SIZE / 2}" cy="${LOGO_SIZE / 2}" r="${LOGO_SIZE / 2 - 1.5}" fill="none" stroke="#FFFFFF" stroke-width="3"/>`
+      );
+      return await sharp(LOGO_FILE)
+        .resize(LOGO_SIZE, LOGO_SIZE, { fit: "cover" })
+        .composite([{ input: mask, blend: "dest-in" }, { input: ring }])
+        .png()
+        .toBuffer();
+    } catch {
+      console.warn("CSP logo not found at public/brand/csp-logo.jpg — using the plain badge.");
+      return null;
+    }
+  })();
+  return logoPromise;
+}
+
+/** CSP logo + name bottom-left, handle bottom-right, on every format. */
 export async function pushBrand(layers: Layer[]): Promise<void> {
-  const top = CSP_HEIGHT - 40 - 52;
-  const circle = svg(52, 52, `<circle cx="26" cy="26" r="23" fill="${COLORS.red}" stroke="#FFFFFF" stroke-width="3"/>`);
-  const label = await renderText(markup("CSP", COLORS.white), 16);
+  const top = CSP_HEIGHT - 28 - LOGO_SIZE;
+  const centre = top + LOGO_SIZE / 2;
+  const logo = await loadLogo();
   const name = await renderText(markup("Corporate Slaves Party", COLORS.white), 26, { align: "left" });
   const handle = await renderText(markup("@csp_officials", COLORS.white), 26, { align: "left" });
 
+  if (logo) {
+    layers.push({ input: logo, left: 40, top });
+  } else {
+    const label = await renderText(markup("CSP", COLORS.white), 18);
+    layers.push(
+      {
+        input: svg(LOGO_SIZE, LOGO_SIZE, `<circle cx="${LOGO_SIZE / 2}" cy="${LOGO_SIZE / 2}" r="${LOGO_SIZE / 2 - 3}" fill="${COLORS.red}" stroke="#FFFFFF" stroke-width="3"/>`),
+        left: 40,
+        top,
+      },
+      { input: label.buffer, left: 40 + Math.round((LOGO_SIZE - label.width) / 2), top: Math.round(centre - label.height / 2) }
+    );
+  }
+
   layers.push(
-    { input: circle, left: 40, top },
-    {
-      input: label.buffer,
-      left: 40 + Math.round((52 - label.width) / 2),
-      top: top + Math.round((52 - label.height) / 2),
-    },
-    { input: name.buffer, left: 104, top: top + Math.round((52 - name.height) / 2) },
-    { input: handle.buffer, left: CSP_WIDTH - 40 - handle.width, top: top + Math.round((52 - handle.height) / 2) }
+    { input: name.buffer, left: 40 + LOGO_SIZE + 16, top: Math.round(centre - name.height / 2) },
+    { input: handle.buffer, left: CSP_WIDTH - 40 - handle.width, top: Math.round(centre - handle.height / 2) }
   );
 }
 

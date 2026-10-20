@@ -454,7 +454,9 @@ function highestDayInHistory(recentTopics: string[]): number {
 export function buildAccountPrompt(
   username: AutomationAccount,
   recentTopics: string[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  /** Force a CSP format instead of today's rotation (manual runs). */
+  cspFormat?: CspFormat
 ): string {
   const recentTopicsText =
     recentTopics.length > 0
@@ -462,7 +464,7 @@ export function buildAccountPrompt(
       : "- No previous topics available.";
 
   if (username === "csp_officials") {
-    return buildCspPrompt(getIstWeekday(now), recentTopicsText, getCspFormatForDate(now));
+    return buildCspPrompt(getIstWeekday(now), recentTopicsText, cspFormat ?? getCspFormatForDate(now));
   }
 
   return buildTradeversePrompt(

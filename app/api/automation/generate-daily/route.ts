@@ -7,7 +7,12 @@ import {
   buildAccountPrompt,
   getNextTradeverseDay,
 } from "@/lib/automation/brand-profiles";
-import { getCspFormatForDate, parseCspTemplate } from "@/lib/automation/csp-content";
+import {
+  CSP_FORMATS,
+  type CspFormat,
+  getCspFormatForDate,
+  parseCspTemplate,
+} from "@/lib/automation/csp-content";
 import { generateSlideArt } from "@/lib/automation/tradeverse-art";
 import {
   TradeversePost,
@@ -25,7 +30,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 export const maxDuration = 300;
 
 /**
- * GET /api/automation/generate-daily[?account=<handle>]
+ * GET /api/automation/generate-daily[?account=<handle>][&format=<csp format>]
  *
  * Vercel Cron entry point (see vercel.json). Generates one review-only draft
  * per account — never publishes. Pass ?account=csp_officials (or
@@ -222,7 +227,10 @@ async function insertDraft(row: Record<string, unknown>): Promise<string> {
   return data.id as string;
 }
 
-async function generateForAccount(username: AutomationAccount): Promise<DraftResult> {
+async function generateForAccount(
+  username: AutomationAccount,
+  cspFormat?: CspFormat
+): Promise<DraftResult> {
   const { account, brandId, error } = await findAccountByInstagramUsername(username);
 
   if (error || !account) {
@@ -230,7 +238,7 @@ async function generateForAccount(username: AutomationAccount): Promise<DraftRes
   }
 
   const recentTopics = await getRecentTopics(account.id);
-  const prompt = buildAccountPrompt(username, recentTopics);
+  const prompt = buildAccountPrompt(username, recentTopics, new Date(), cspFormat);
   const parsed = parseJsonObject(await AIService.generateContent(prompt));
 
   const base = {
@@ -294,7 +302,7 @@ async function generateForAccount(username: AutomationAccount): Promise<DraftRes
   }
 
   const post = parseCspPost(parsed);
-  const format = getCspFormatForDate();
+  const format = cspFormat ?? getCspFormatForDate();
   const template = parseCspTemplate(parsed, format);
 
   let imageUrl: string | null = null;
@@ -360,6 +368,20 @@ export async function GET(request: NextRequest) {
   }
 
   const requested = request.nextUrl.searchParams.get("account");
+
+  // Optional ?format=<csp format> to pick a CSP template instead of today's
+  // rotation (only affects @csp_officials).
+  const requestedFormat = request.nextUrl.searchParams.get("format");
+  let cspFormat: CspFormat | undefined;
+  if (requestedFormat) {
+    if (!(CSP_FORMATS as readonly string[]).includes(requestedFormat)) {
+      return NextResponse.json(
+        { error: `Unknown format "${requestedFormat}". Use one of: ${CSP_FORMATS.join(", ")}.` },
+        { status: 400 }
+      );
+    }
+    cspFormat = requestedFormat as CspFormat;
+  }
   let accounts: readonly AutomationAccount[] = AUTOMATION_ACCOUNTS;
 
   if (requested) {
@@ -382,7 +404,7 @@ export async function GET(request: NextRequest) {
 
   for (const username of accounts) {
     try {
-      results.push(await generateForAccount(username));
+      results.push(await generateForAccount(username, cspFormat));
     } catch (error) {
       console.error(`Daily automation failed for ${username}:`, error);
 
