@@ -7,6 +7,7 @@ import {
   buildAccountPrompt,
   getNextTradeverseDay,
 } from "@/lib/automation/brand-profiles";
+import { getCspFormatForDate, parseCspTemplate } from "@/lib/automation/csp-content";
 import { generateSlideArt } from "@/lib/automation/tradeverse-art";
 import {
   TradeversePost,
@@ -14,6 +15,7 @@ import {
   parseTradeversePost,
 } from "@/lib/automation/tradeverse-content";
 import { buildCaptionWithHashtags } from "@/lib/instagram/caption";
+import { renderCspPost } from "@/lib/render/csp-post";
 import { renderTradeverseSlide } from "@/lib/render/tradeverse-slides";
 import { AIService } from "@/lib/services/ai.service";
 import { findAccountByInstagramUsername } from "@/lib/services/automation.service";
@@ -35,8 +37,11 @@ export const maxDuration = 300;
  *   brand template (lib/render/tradeverse-slides.tsx). Artwork comes from
  *   Cloudflare FLUX (text-free) when CLOUDFLARE_* env vars are set, else
  *   code-drawn illustrations. Slide 1 becomes the draft's image.
- * - @csp_officials: no automatic image yet (its template is not built). The
- *   draft carries per-slide GPT-image prompts in its production plan.
+ * - @csp_officials: single image drawn entirely in code (lib/render/csp/*)
+ *   with proper Devanagari shaping — no AI image. The format rotates daily:
+ *   dictionary → chat → notifications → poster → versus. If Gemini omits the
+ *   template fields, the draft is saved without an image and carries
+ *   GPT-image prompts instead.
  */
 
 type CspSlide = {
@@ -289,11 +294,34 @@ async function generateForAccount(username: AutomationAccount): Promise<DraftRes
   }
 
   const post = parseCspPost(parsed);
+  const format = getCspFormatForDate();
+  const template = parseCspTemplate(parsed, format);
+
+  let imageUrl: string | null = null;
+  let imageError: string | null = null;
+  let imageNote = "";
+
+  if (template) {
+    try {
+      const png = await renderCspPost(template);
+      imageUrl = await uploadPng(account.user_id, `${Date.now()}-csp.png`, png);
+      imageNote = `[Image generated automatically (${template.format} format) — check the Hindi text before publishing.]`;
+    } catch (renderError) {
+      imageError = renderError instanceof Error ? renderError.message : String(renderError);
+      console.error("CSP image rendering failed:", imageError);
+      imageNote = `[Automatic image failed (${imageError}). Create it from the image prompt below and attach it via Edit → Post image.]`;
+    }
+  } else {
+    imageNote =
+      "[Gemini returned no usable template fields, so no automatic image — create it from the image prompt below and attach it via Edit → Post image.]";
+  }
 
   const plan = [
     `PRODUCTION PLAN — ${post.topic}`,
     `Format: ${post.content_type}${post.layout ? ` | Layout: ${post.layout}` : ""} | Slides: ${post.slides.length}`,
-    "[No automatic image for CSP yet — create each slide from its image prompt and attach it before publishing.]",
+    imageNote,
+    imageUrl ? `Image: ${imageUrl}` : "",
+    template ? `FORMAT: ${template.format}\nTEMPLATE TEXT:\n${JSON.stringify(template, null, 2)}` : `FORMAT: ${format}`,
     post.slides
       .map(
         (slide) =>
@@ -301,7 +329,9 @@ async function generateForAccount(username: AutomationAccount): Promise<DraftRes
           `VISUAL:\n${slide.visual}\n\nIMAGE PROMPT (paste into ChatGPT / GPT-image):\n${slide.image_prompt}`
       )
       .join("\n\n"),
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const id = await insertDraft({
     ...base,
@@ -310,17 +340,17 @@ async function generateForAccount(username: AutomationAccount): Promise<DraftRes
     topic: post.topic,
     prompt: plan,
     generated_content: buildCaptionWithHashtags(post.caption, post.hashtags),
-    image_url: null,
+    image_url: imageUrl,
   });
 
   return {
     instagram_username: username,
     id,
     topic: post.topic,
-    image_url: null,
-    slide_image_urls: [],
+    image_url: imageUrl,
+    slide_image_urls: imageUrl ? [imageUrl] : [],
     brand_id: brandId ?? null,
-    image_error: null,
+    image_error: imageError,
   };
 }
 

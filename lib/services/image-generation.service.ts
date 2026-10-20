@@ -16,6 +16,7 @@
  *
  * Any failure returns null and the slide falls back to its code-drawn
  * illustration, so artwork problems never block a draft.
+
  */
 
 const DEFAULT_MODEL = "@cf/black-forest-labs/flux-1-schnell";
@@ -83,6 +84,7 @@ export class ImageGenerationService {
       clearTimeout(timeout);
     }
   }
+
 }
 
 /** Accent name used in prompts so the artwork's glow matches the slide colour. */

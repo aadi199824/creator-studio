@@ -13,6 +13,8 @@
  * official brand file. Replace them if official values exist.
  */
 
+import { type CspFormat, getCspFormatForDate } from "@/lib/automation/csp-content";
+
 export type AutomationAccount = "csp_officials" | "tradeverse.academy";
 
 export const AUTOMATION_ACCOUNTS: readonly AutomationAccount[] = [
@@ -78,7 +80,7 @@ const CSP_WEEKDAY_THEMES: Record<Weekday, string> = {
   Sunday: "Sunday-night anxiety, the emotional end of the weekend",
 };
 
-function buildCspPrompt(weekday: Weekday, recentTopicsText: string): string {
+function buildCspPrompt(weekday: Weekday, recentTopicsText: string, format: CspFormat): string {
   return `
 You are the content strategist, Hinglish copywriter and art director for the Instagram account @csp_officials (brand hashtag: #CorporateSlavesParty).
 
@@ -117,16 +119,8 @@ DESIGN SYSTEM (match the live posts):
   light, expressive face and hands (shrug, facepalm, exhausted stare, disbelief).
   Always describe him the same way so he stays recognisable.
 
-LAYOUTS (rotate; do not use the same one as the last few posts):
-1. "headline_character": oversized stacked headline on top, mascot lower-centre, two small
-   torn-paper panels left/right each with a red circled ❌ and a short line (white + yellow),
-   bottom-left yellow-bordered 💡 "याद रखो:" tip box.
-2. "two_panel_comparison": split-screen meme (Expectation vs Reality, HR says vs Actually,
-   Friday vs Monday) with red/yellow labels and the mascot reacting in each panel.
-3. "typography_only": minimal giant Hinglish one-liner on textured black, one yellow keyword,
-   small red underline, no character.
-Default format is single_image. Use a carousel (max 5 slides) only for list-style jokes
-("5 types of colleagues…").
+FORMAT: every post is a single image in today's rotating format (details at the end). The design
+system above is only used if a human remakes the image manually from your image_prompt.
 
 CAPTION FORMAT (Hinglish, match this structure):
 "<Short title in quotes>"
@@ -146,8 +140,73 @@ RECENT TOPICS:
 ${recentTopicsText}
 
 ${OUTPUT_CONTRACT}
+
+AUTOMATIC IMAGE ("template") — REQUIRED for @csp_officials:
+The post image is drawn automatically from your words. Today's format is "${format}" — the
+formats rotate daily so the feed stays fresh. Use content_type "single_image", layout "${format}",
+exactly 1 slide, and ALSO add this "template" object:
+
+${CSP_FORMAT_SPECS[format]}
+
+Rules for every format:
+- Build it around today's theme (${CSP_WEEKDAY_THEMES[weekday]}) and make it instantly
+  relatable to Indian office employees — something they would tag a colleague on.
+- Original jokes only. Never name real companies, managers, people or real apps/brands.
+- Wrap 1–3 key words in **double asterisks** to highlight them (yellow, or red where noted).
+- Hindi must be correct Devanagari. No emoji anywhere inside "template".
+- The caption expands the joke and invites comments (e.g. "Comment करो अपना…").
 `;
 }
+
+/** JSON shape + writing guidance for each rotating CSP format. */
+const CSP_FORMAT_SPECS: Record<CspFormat, string> = {
+  dictionary: `"template": {
+  "title_white": "max 12 chars: CORPORATE, or match the theme — HR, MANAGER, APPRAISAL, MONDAY, WFH, MEETING",
+  "title_red": "DICTIONARY",
+  "subtitle": "max 36 chars Hinglish, e.g. 'Office की भाषा → असली मतलब'",
+  "entries": [ { "phrase": "real office phrase in English, max 26 chars", "meaning": "its REAL meaning, short Hinglish punchline, max 36 chars" } ],
+  "footer": "max 55 chars Hinglish engagement line"
+}
+4–5 entries. Every phrase must be something people genuinely hear at work.`,
+
+  chat: `"template": {
+  "headline": "max 30 chars quote of the boss's famous line, e.g. '\"**बस 5 min** का call है…\"'",
+  "subheadline": "max 36 chars, who/when, e.g. '— Manager, रात 11:47 बजे'",
+  "contact": "max 16 chars, a role not a name: Manager, Boss, HR, Team Lead, Client",
+  "messages": [ { "from": "them|me", "text": "max 80 chars, Hinglish in Roman script like real chats", "time": "11:47 PM" } ],
+  "stamp": "max 28 chars punchline stamp, e.g. '1:12 AM — call jaari hai'"
+}
+4–6 messages that escalate into the punchline. Times must move forward realistically.`,
+
+  notifications: `"template": {
+  "headline": "max 28 chars, e.g. 'Sunday रात **10:58**' (** = red)",
+  "subheadline": "max 36 chars, e.g. 'और **Monday** पहले ही आ गया…'",
+  "time": "HH:MM shown on the lock screen, matching the headline",
+  "date": "max 22 chars, e.g. 'Sunday, 19 October' — use today's real weekday",
+  "notifications": [ { "app": "max 16 chars sender: Boss, HR Portal, Team Group, Mail, Client", "text": "max 65 chars", "ago": "now|2m|5m|1h" } ]
+}
+4 notifications, each funnier and more dreadful than the last.`,
+
+  poster: `"template": {
+  "headline": [ { "text": "max 28 chars", "color": "white|red|yellow" } ],
+  "left_panel": "max 45 chars, the expectation or myth",
+  "right_panel": "max 45 chars, the reality",
+  "tip": "max 65 chars 'याद रखो' takeaway with a humorous twist"
+}
+3–5 short headline lines that read top-to-bottom as one punchline (like "Monday का सच…" /
+"Weekend **खत्म होते ही,**" / "सपने नहीं," / "Deadlines" / "याद आती हैं!"). Red for the 1–2 most
+emotional lines, white for connecting lines.`,
+
+  versus: `"template": {
+  "topic": "max 30 chars, e.g. 'Appraisal Season', 'First Job', 'WFH'",
+  "left_title": "max 12 chars, usually 'Expectation'",
+  "right_title": "max 12 chars, usually 'Reality'",
+  "left_points": ["3–4 items, max 36 chars each, the hopeful version"],
+  "right_points": ["3–4 items, max 36 chars each, the brutal office reality — the punchlines"],
+  "footer": "max 55 chars engagement line, e.g. 'आपका appraisal किस side गया? Comment करो'"
+}
+Left and right points should pair up 1-to-1 so each reality answers its expectation.`,
+};
 
 // ---------------------------------------------------------------------------
 // Tradeverse Academy — 30-day trading education journey (English)
@@ -359,7 +418,7 @@ export function buildAccountPrompt(
       : "- No previous topics available.";
 
   if (username === "csp_officials") {
-    return buildCspPrompt(getIstWeekday(now), recentTopicsText);
+    return buildCspPrompt(getIstWeekday(now), recentTopicsText, getCspFormatForDate(now));
   }
 
   return buildTradeversePrompt(
