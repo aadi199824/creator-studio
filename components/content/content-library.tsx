@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import ContentCard from "./content-card";
 import FilterBar from "./filter-bar";
 import EditContentDialog from "./edit-content-dialog";
+import GeneratePostPanel from "./generate-post-panel";
 
 import { ContentService } from "@/lib/services/content.service";
 import { Content } from "@/lib/types/content";
@@ -175,6 +176,9 @@ if (loading) {
 
 return (
   <div className="space-y-6">
+    {/* Generate a draft on demand */}
+    <GeneratePostPanel onGenerated={fetchGenerations} />
+
     {/* Search */}
     <input
       type="text"

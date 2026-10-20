@@ -33,6 +33,19 @@ export const CSP_FORMATS = [
 ] as const;
 export type CspFormat = (typeof CSP_FORMATS)[number];
 
+/** Human-readable names for the format picker in the Content Library. */
+export const CSP_FORMAT_LABELS: Record<CspFormat, string> = {
+  dictionary: "Corporate Dictionary",
+  chat: "Late-night Chat",
+  payslip: "Fake Payslip",
+  notifications: "Sunday Notifications",
+  poster: "Headline Poster",
+  battery: "Weekly Battery",
+  versus: "Expectation vs Reality",
+  calendar: "Calendar Overload",
+  ticket: "Boarding Pass",
+};
+
 export type CspLineColor = "white" | "red" | "yellow";
 
 export type CspDictionary = {
