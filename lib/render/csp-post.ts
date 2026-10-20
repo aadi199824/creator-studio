@@ -5,10 +5,14 @@
 
 import type { CspTemplateContent } from "@/lib/automation/csp-content";
 
+import { renderBattery } from "./csp/battery";
+import { renderCalendar } from "./csp/calendar";
 import { renderChat } from "./csp/chat";
 import { renderDictionary } from "./csp/dictionary";
 import { renderNotifications } from "./csp/notifications";
+import { renderPayslip } from "./csp/payslip";
 import { renderPoster } from "./csp/poster";
+import { renderTicket } from "./csp/ticket";
 import { renderVersus } from "./csp/versus";
 
 export { CSP_HEIGHT, CSP_WIDTH } from "./csp/common";
@@ -25,5 +29,13 @@ export async function renderCspPost(content: CspTemplateContent): Promise<Buffer
       return renderPoster(content);
     case "versus":
       return renderVersus(content);
+    case "payslip":
+      return renderPayslip(content);
+    case "battery":
+      return renderBattery(content);
+    case "calendar":
+      return renderCalendar(content);
+    case "ticket":
+      return renderTicket(content);
   }
 }

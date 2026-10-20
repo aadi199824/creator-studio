@@ -4,7 +4,7 @@ import { CSP_FORMATS, type CspFormat, type CspTemplateContent } from "@/lib/auto
 import { renderCspPost } from "@/lib/render/csp-post";
 
 /**
- * GET /api/automation/preview-csp?format=dictionary|chat|notifications|poster|versus
+ * GET /api/automation/preview-csp?format=<one of CSP_FORMATS>
  *
  * DEVELOPMENT ONLY (404 in production). Renders a @csp_officials format
  * with fixed sample text — no Gemini call, nothing saved — to check layout
@@ -73,6 +73,73 @@ const SAMPLES: Record<CspFormat, CspTemplateContent> = {
     left_points: ["30% hike पक्का", "Promotion इस बार तो मिलेगा", "Manager ने तारीफ़ की थी"],
     right_points: ["**4%** hike + motivational speech", '"Next cycle में देखेंगे"', "Bell curve ने सब बिगाड़ दिया"],
     footer: "आपका appraisal किस side गया? Comment करो",
+  },
+  payslip: {
+    format: "payslip",
+    headline: "Salary **Credited**…",
+    subheadline: "और 2 दिन में **Debited**",
+    employee_line: "Employee: Aam Aadmi · October",
+    earnings: [{ label: "Basic Salary", amount: "₹45,000" }],
+    deductions: [
+      { label: "Rent", amount: "₹18,000" },
+      { label: "EMI (Phone जो boss से बड़ा है)", amount: "₹6,500" },
+      { label: "Weekend Swiggy therapy", amount: "₹4,200" },
+      { label: "Office party contribution", amount: "₹1,000" },
+      { label: "सपने", amount: "सारे" },
+    ],
+    net_amount: "₹15,300",
+    stamp: "25 तारीख तक",
+  },
+  battery: {
+    format: "battery",
+    headline: "Employee का **Battery**",
+    subheadline: "Monday से Friday तक",
+    days: [
+      { day: "MON", percent: 3, label: "Alarm ने मार दिया" },
+      { day: "TUE", percent: 12, label: "5 meetings back to back" },
+      { day: "WED", percent: 30, label: "आधा हफ्ता survive" },
+      { day: "THU", percent: 55, label: "Weekend दिखने लगा" },
+      { day: "FRI", percent: 100, label: "5:59 PM वाली energy" },
+    ],
+  },
+  calendar: {
+    format: "calendar",
+    headline: "मेरा **Calendar**",
+    subheadline: "vs मेरा **काम करने का time**",
+    day_label: "Tuesday",
+    summary: "9 meetings",
+    events: [
+      { time: "10 AM", title: "Daily Standup (15 min, chalega 45)", kind: "meeting", long: false },
+      { time: "", title: "Sync on the sync", kind: "meeting", long: false },
+      { time: "11 AM", title: 'Alignment call — "quick" hai', kind: "meeting", long: true },
+      { time: "12 PM", title: "Brainstorm: Why are we behind?", kind: "meeting", long: true },
+      { time: "1 PM", title: "Lunch (desk pe, mute karke)", kind: "break", long: false },
+      { time: "2 PM", title: "Client call (camera on please)", kind: "meeting", long: true },
+      { time: "4 PM", title: "Actual work — 15 min", kind: "work", long: false },
+      { time: "", title: '"Can we connect EOD?"', kind: "meeting", long: false },
+    ],
+  },
+  ticket: {
+    format: "ticket",
+    headline: "हर हफ्ते की **Flight**",
+    subheadline: "जो कभी time पर नहीं पहुँचती",
+    from_code: "MON",
+    from_time: "Monday 9:00 AM",
+    to_code: "FRI",
+    to_time: "Friday 6:00 PM",
+    fields: [
+      { label: "PASSENGER", value: "Aam Employee", color: "white" },
+      { label: "GATE", value: "Meeting Room 3", color: "white" },
+      { label: "SEAT", value: "Hot Desk", color: "white" },
+      { label: "STATUS", value: "DELAYED", color: "red" },
+      { label: "BAGGAGE", value: "Pending Tasks", color: "white" },
+      { label: "CLASS", value: "Overtime", color: "yellow" },
+    ],
+    stub: [
+      { label: "DELAY", value: "Till Next Appraisal" },
+      { label: "BOARDING", value: "Saturday Login" },
+    ],
+    footer: "आपकी flight कब land होती है? **Comment करो**",
   },
 };
 

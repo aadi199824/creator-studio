@@ -10,12 +10,27 @@
  * - notifications  — Sunday-night lock screen full of work notifications
  * - poster         — the original big Hinglish headline + ❌ panels + 💡 tip
  * - versus         — Expectation vs Reality, two columns
+ * - payslip        — fake payslip: salary credited, funny deductions
+ * - battery        — employee energy battery, Monday → Friday
+ * - calendar       — a day packed with meetings, 15 min of actual work
+ * - ticket         — "CSP Airways" boarding pass, MON → FRI, delayed
  *
  * Highlight syntax: wrap words in **double asterisks** to render them in
  * the brand yellow.
  */
 
-export const CSP_FORMATS = ["dictionary", "chat", "notifications", "poster", "versus"] as const;
+// Order = rotation order. Similar formats are spaced apart.
+export const CSP_FORMATS = [
+  "dictionary",
+  "chat",
+  "payslip",
+  "notifications",
+  "poster",
+  "battery",
+  "versus",
+  "calendar",
+  "ticket",
+] as const;
 export type CspFormat = (typeof CSP_FORMATS)[number];
 
 export type CspLineColor = "white" | "red" | "yellow";
@@ -65,7 +80,60 @@ export type CspVersus = {
   footer: string;
 };
 
-export type CspTemplateContent = CspDictionary | CspChat | CspNotifications | CspPoster | CspVersus;
+export type CspPayslip = {
+  format: "payslip";
+  headline: string;
+  subheadline: string;
+  employee_line: string;
+  earnings: { label: string; amount: string }[];
+  deductions: { label: string; amount: string }[];
+  net_amount: string;
+  stamp: string;
+};
+
+export type CspBattery = {
+  format: "battery";
+  headline: string;
+  subheadline: string;
+  days: { day: string; percent: number; label: string }[];
+};
+
+export type CspCalendarEvent = { time: string; title: string; kind: "meeting" | "work" | "break"; long: boolean };
+
+export type CspCalendar = {
+  format: "calendar";
+  headline: string;
+  subheadline: string;
+  day_label: string;
+  summary: string;
+  events: CspCalendarEvent[];
+};
+
+export type CspTicketField = { label: string; value: string; color: CspLineColor };
+
+export type CspTicket = {
+  format: "ticket";
+  headline: string;
+  subheadline: string;
+  from_code: string;
+  from_time: string;
+  to_code: string;
+  to_time: string;
+  fields: CspTicketField[];
+  stub: { label: string; value: string }[];
+  footer: string;
+};
+
+export type CspTemplateContent =
+  | CspDictionary
+  | CspChat
+  | CspNotifications
+  | CspPoster
+  | CspVersus
+  | CspPayslip
+  | CspBattery
+  | CspCalendar
+  | CspTicket;
 
 // --- format rotation ----------------------------------------------------------
 
@@ -91,6 +159,15 @@ function clean(value: unknown, max: number, fallback = ""): string {
       : "";
   if (!text) return fallback;
   return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
+}
+
+function lineColor(value: unknown): CspLineColor {
+  return (["white", "red", "yellow"] as const).includes(value as CspLineColor) ? (value as CspLineColor) : "white";
+}
+
+/** Money/label amount without any leading sign (the renderer adds "−"). */
+function amount(value: unknown, max: number): string {
+  return clean(value, max).replace(/^[-−–+\s]+/, "");
 }
 
 function objects(value: unknown): Record<string, unknown>[] {
@@ -212,6 +289,87 @@ export function parseCspTemplate(
         right_title: clean(t.right_title, 14, "Reality"),
         left_points: left,
         right_points: right,
+        footer: clean(t.footer, 60),
+      };
+    }
+
+    case "payslip": {
+      const toRows = (value: unknown, limit: number) =>
+        objects(value)
+          .map((row) => ({ label: clean(row.label, 34), amount: amount(row.amount, 14) }))
+          .filter((row) => row.label && row.amount)
+          .slice(0, limit);
+      const earnings = toRows(t.earnings, 2);
+      const deductions = toRows(t.deductions, 5);
+      if (earnings.length === 0 || deductions.length < 3) return null;
+      return {
+        format,
+        headline: clean(t.headline, 30),
+        subheadline: clean(t.subheadline, 40),
+        employee_line: clean(t.employee_line, 40, "Employee: Aam Aadmi"),
+        earnings,
+        deductions,
+        net_amount: amount(t.net_amount, 14),
+        stamp: clean(t.stamp, 20),
+      };
+    }
+
+    case "battery": {
+      const days = objects(t.days)
+        .map((entry) => ({
+          day: clean(entry.day, 4).toUpperCase(),
+          percent: Math.max(1, Math.min(100, Math.round(Number(entry.percent) || 0))),
+          label: clean(entry.label, 24),
+        }))
+        .filter((entry) => entry.day)
+        .slice(0, 5);
+      if (days.length < 4) return null;
+      return { format, headline: clean(t.headline, 30), subheadline: clean(t.subheadline, 40), days };
+    }
+
+    case "calendar": {
+      const events = objects(t.events)
+        .map((event) => ({
+          time: clean(event.time, 6),
+          title: clean(event.title, 44),
+          kind: (["meeting", "work", "break"] as const).includes(event.kind as CspCalendarEvent["kind"])
+            ? (event.kind as CspCalendarEvent["kind"])
+            : ("meeting" as const),
+          long: event.long === true,
+        }))
+        .filter((event) => event.title)
+        .slice(0, 9);
+      if (events.length < 5) return null;
+      return {
+        format,
+        headline: clean(t.headline, 30),
+        subheadline: clean(t.subheadline, 40),
+        day_label: clean(t.day_label, 14, "Tuesday"),
+        summary: clean(t.summary, 18, `${events.length} meetings`),
+        events,
+      };
+    }
+
+    case "ticket": {
+      const fields = objects(t.fields)
+        .map((field) => ({ label: clean(field.label, 12).toUpperCase(), value: clean(field.value, 22), color: lineColor(field.color) }))
+        .filter((field) => field.label && field.value)
+        .slice(0, 6);
+      const stub = objects(t.stub)
+        .map((item) => ({ label: clean(item.label, 12).toUpperCase(), value: clean(item.value, 22) }))
+        .filter((item) => item.label && item.value)
+        .slice(0, 2);
+      if (fields.length < 4) return null;
+      return {
+        format,
+        headline: clean(t.headline, 30),
+        subheadline: clean(t.subheadline, 40),
+        from_code: clean(t.from_code, 4, "MON").toUpperCase(),
+        from_time: clean(t.from_time, 22),
+        to_code: clean(t.to_code, 4, "FRI").toUpperCase(),
+        to_time: clean(t.to_time, 22),
+        fields,
+        stub,
         footer: clean(t.footer, 60),
       };
     }

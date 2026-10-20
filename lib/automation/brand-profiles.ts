@@ -206,6 +206,50 @@ emotional lines, white for connecting lines.`,
   "footer": "max 55 chars engagement line, e.g. 'आपका appraisal किस side गया? Comment करो'"
 }
 Left and right points should pair up 1-to-1 so each reality answers its expectation.`,
+
+  payslip: `"template": {
+  "headline": "max 28 chars, e.g. 'Salary **Credited**…'",
+  "subheadline": "max 36 chars, e.g. 'और 2 दिन में Debited'",
+  "employee_line": "max 36 chars, e.g. 'Employee: Aam Aadmi · October' (generic, never a real name)",
+  "earnings": [ { "label": "max 30 chars", "amount": "e.g. ₹45,000" } ],
+  "deductions": [ { "label": "max 30 chars funny Hinglish deduction", "amount": "e.g. ₹18,000 or a word like सारे" } ],
+  "net_amount": "what is left, e.g. ₹15,300",
+  "stamp": "max 18 chars red stamp, e.g. '25 तारीख तक'"
+}
+1 earning, 4–5 deductions mixing real ones (Rent, EMI) with emotional ones (सपने, Weekend plans).
+Use plausible but clearly generic round numbers; amounts must roughly add up. No "-" signs (added automatically).`,
+
+  battery: `"template": {
+  "headline": "max 28 chars, e.g. 'Employee का **Battery**'",
+  "subheadline": "max 36 chars, e.g. 'Monday से Friday तक'",
+  "days": [ { "day": "MON", "percent": 3, "label": "max 22 chars caption" } ]
+}
+Exactly 5 days MON–FRI. Percent rises through the week (e.g. 3, 12, 30, 55, 100) unless the joke
+needs a twist. Each label is a 2–4 word Hinglish reason.`,
+
+  calendar: `"template": {
+  "headline": "max 28 chars, e.g. 'मेरा **Calendar**' (** = red)",
+  "subheadline": "max 36 chars, e.g. 'vs मेरा **काम करने का time**'",
+  "day_label": "weekday name",
+  "summary": "max 16 chars, e.g. '9 meetings'",
+  "events": [ { "time": "10 AM or empty", "title": "max 40 chars", "kind": "meeting|break|work", "long": false } ]
+}
+6–9 events in time order. Mostly "meeting" (funny realistic titles like 'Sync on the sync'),
+one "break" (e.g. 'Lunch (desk pe, mute karke)'), and exactly ONE "work" event such as
+'Actual work — 15 min' near the end (it gets crossed out by the clock line). Mark 2–3 events long:true.`,
+
+  ticket: `"template": {
+  "headline": "max 28 chars, e.g. 'हर हफ्ते की **Flight**'",
+  "subheadline": "max 36 chars, e.g. 'जो कभी time पर नहीं पहुँचती'",
+  "from_code": "max 4 chars, e.g. MON", "from_time": "e.g. Monday 9:00 AM",
+  "to_code": "max 4 chars, e.g. FRI", "to_time": "e.g. Friday 6:00 PM",
+  "fields": [ { "label": "max 10 chars e.g. GATE", "value": "max 20 chars", "color": "white|red|yellow" } ],
+  "stub": [ { "label": "max 10 chars e.g. DELAY", "value": "max 20 chars" } ],
+  "footer": "max 55 chars engagement line"
+}
+6 fields (PASSENGER, GATE, SEAT, STATUS, BAGGAGE, CLASS or themed equivalents) with office
+punchlines; STATUS usually red (DELAYED). 2 stub items. Route can change with the theme
+(e.g. JAN → APPRAISAL, LOGIN → LOGOUT).`,
 };
 
 // ---------------------------------------------------------------------------
