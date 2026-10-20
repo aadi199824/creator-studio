@@ -3,34 +3,67 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   AUTOMATION_ACCOUNTS,
   AutomationAccount,
+  TRADEVERSE_JOURNEY_LENGTH,
   buildAccountPrompt,
+  getNextTradeverseDay,
 } from "@/lib/automation/brand-profiles";
-import { buildCaptionWithHashtags } from "@/lib/instagram/caption";
-import { AIService } from "@/lib/services/ai.service";
+import { generateSlideArt } from "@/lib/automation/tradeverse-art";
 import {
-  findAccountByInstagramUsername,
-} from "@/lib/services/automation.service";
+  TradeversePost,
+  describeTradeverseSlide,
+  parseTradeversePost,
+} from "@/lib/automation/tradeverse-content";
+import { buildCaptionWithHashtags } from "@/lib/instagram/caption";
+import { renderTradeverseSlide } from "@/lib/render/tradeverse-slides";
+import { AIService } from "@/lib/services/ai.service";
+import { findAccountByInstagramUsername } from "@/lib/services/automation.service";
+import { ImageGenerationService } from "@/lib/services/image-generation.service";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 export const maxDuration = 300;
 
-type GeneratedSlide = {
+/**
+ * GET /api/automation/generate-daily[?account=<handle>]
+ *
+ * Vercel Cron entry point (see vercel.json). Generates one review-only draft
+ * per account — never publishes. Pass ?account=csp_officials (or
+ * tradeverse.academy) to re-run a single account without creating a
+ * duplicate draft for the other one.
+ *
+ * Images:
+ * - @tradeverse.academy: every carousel slide is rendered from the fixed
+ *   brand template (lib/render/tradeverse-slides.tsx). Artwork comes from
+ *   Cloudflare FLUX (text-free) when CLOUDFLARE_* env vars are set, else
+ *   code-drawn illustrations. Slide 1 becomes the draft's image.
+ * - @csp_officials: no automatic image yet (its template is not built). The
+ *   draft carries per-slide GPT-image prompts in its production plan.
+ */
+
+type CspSlide = {
   slide: number;
   on_image_text: string;
   visual: string;
   image_prompt: string;
 };
 
-type GeneratedPost = {
+type CspPost = {
   topic: string;
   content_type: string;
   tone: string;
   layout: string;
   caption: string;
   hashtags: string[];
-  slides: GeneratedSlide[];
-  image_prompt: string;
-  sources: string[];
+  slides: CspSlide[];
+};
+
+type DraftResult = {
+  instagram_username: AutomationAccount;
+  id: string;
+  topic: string;
+  image_url: string | null;
+  slide_image_urls: string[];
+  brand_id: string | null;
+  image_error: string | null;
 };
 
 function verifyCronSecret(request: NextRequest): boolean {
@@ -42,14 +75,18 @@ function verifyCronSecret(request: NextRequest): boolean {
   );
 }
 
-async function getRecentTopics(userId: string): Promise<string[]> {
+/**
+ * Recent topics for ONE Instagram account. Filtering by social_account_id
+ * (not just user_id) matters because both brands can belong to the same
+ * user — otherwise CSP topics leak into Tradeverse's anti-repeat list.
+ */
+async function getRecentTopics(socialAccountId: string): Promise<string[]> {
   const supabase = createAdminSupabaseClient();
 
   const { data, error } = await supabase
     .from("ai_generations")
     .select("topic, created_at")
-    .eq("user_id", userId)
-    .eq("platform", "instagram")
+    .eq("social_account_id", socialAccountId)
     .order("created_at", { ascending: false })
     .limit(30);
 
@@ -58,8 +95,25 @@ async function getRecentTopics(userId: string): Promise<string[]> {
   }
 
   return (data ?? [])
-    .map((row) => row.topic)
-    .filter((topic): topic is string => Boolean(topic));
+    .map((row: { topic: string | null }) => row.topic)
+    .filter((topic: string | null): topic is string => Boolean(topic));
+}
+
+function parseJsonObject(text: string): Record<string, unknown> {
+  const cleaned = text
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  const parsed: unknown = JSON.parse(cleaned);
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Gemini did not return a JSON object.");
+  }
+
+  return parsed as Record<string, unknown>;
 }
 
 function asStringArray(value: unknown): string[] {
@@ -68,222 +122,243 @@ function asStringArray(value: unknown): string[] {
     : [];
 }
 
-function extractJson(text: string): GeneratedPost {
-  const cleaned = text
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  const parsed = JSON.parse(cleaned);
-
+function parseCspPost(parsed: Record<string, unknown>): CspPost {
   if (
-    !parsed ||
-    typeof parsed !== "object" ||
     typeof parsed.topic !== "string" ||
-    typeof parsed.content_type !== "string" ||
-    typeof parsed.tone !== "string" ||
     typeof parsed.caption !== "string" ||
-    typeof parsed.image_prompt !== "string" ||
     !Array.isArray(parsed.slides) ||
     parsed.slides.length === 0
   ) {
     throw new Error(
-      "Gemini returned an invalid daily-post structure (expected topic, content_type, tone, caption, slides[], image_prompt)."
+      "Gemini returned an invalid CSP post (expected topic, caption and slides[])."
     );
   }
 
-  const slides: GeneratedSlide[] = parsed.slides
+  const slides: CspSlide[] = parsed.slides
     .filter(
       (slide: unknown): slide is Record<string, unknown> =>
         Boolean(slide) && typeof slide === "object"
     )
     .map((slide: Record<string, unknown>, index: number) => ({
       slide: typeof slide.slide === "number" ? slide.slide : index + 1,
-      on_image_text:
-        typeof slide.on_image_text === "string" ? slide.on_image_text : "",
+      on_image_text: typeof slide.on_image_text === "string" ? slide.on_image_text : "",
       visual: typeof slide.visual === "string" ? slide.visual : "",
-      image_prompt:
-        typeof slide.image_prompt === "string" ? slide.image_prompt : "",
+      image_prompt: typeof slide.image_prompt === "string" ? slide.image_prompt : "",
     }));
 
   return {
-    topic: parsed.topic,
-    content_type: parsed.content_type,
-    tone: parsed.tone,
+    topic: parsed.topic.trim(),
+    content_type: typeof parsed.content_type === "string" ? parsed.content_type : "single_image",
+    tone: typeof parsed.tone === "string" ? parsed.tone : "humorous",
     layout: typeof parsed.layout === "string" ? parsed.layout : "",
     caption: parsed.caption.trim(),
     hashtags: asStringArray(parsed.hashtags),
     slides,
-    image_prompt: parsed.image_prompt,
-    sources: asStringArray(parsed.sources),
   };
 }
 
-/**
- * Human-readable production plan stored in ai_generations.prompt (shown in
- * the Content Library's Edit dialog). Interim home for slide copy until a
- * dedicated slides column + carousel publishing exist — it must NOT go into
- * generated_content, because generated_content is what gets published as
- * the Instagram caption.
- */
-function buildProductionPlan(post: GeneratedPost, imageNote: string): string {
-  const slidesText = post.slides
-    .map(
-      (slide) =>
-        `--- Slide ${slide.slide} ---\n` +
-        `ON-IMAGE TEXT:\n${slide.on_image_text}\n\n` +
-        `VISUAL:\n${slide.visual}\n\n` +
-        `IMAGE PROMPT (paste into ChatGPT / GPT-image):\n${slide.image_prompt}`
-    )
-    .join("\n\n");
+async function uploadPng(userId: string, fileName: string, bytes: Buffer): Promise<string> {
+  const supabase = createAdminSupabaseClient();
+  const path = `${userId}/automation/${fileName}`;
 
-  return [
-    `PRODUCTION PLAN — ${post.topic}`,
-    `Format: ${post.content_type}${post.layout ? ` | Layout: ${post.layout}` : ""} | Slides: ${post.slides.length}`,
-    imageNote,
-    slidesText,
-    post.sources.length > 0
-      ? `Sources:\n${post.sources.map((source) => `- ${source}`).join("\n")}`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  const { error } = await supabase.storage
+    .from("media")
+    .upload(path, bytes, { contentType: "image/png", upsert: true });
+
+  if (error) {
+    throw new Error(`Supabase Storage upload failed: ${error.message}`);
+  }
+
+  return supabase.storage.from("media").getPublicUrl(path).data.publicUrl;
 }
 
-async function generateForAccount(username: AutomationAccount) {
-  const { account, brandId, error } =
-    await findAccountByInstagramUsername(username);
+/** Renders and uploads every Tradeverse slide. Returns public URLs in order. */
+async function renderTradeverseCarousel(
+  post: TradeversePost,
+  day: number,
+  userId: string
+): Promise<{ urls: string[]; aiArt: number; artSlots: number }> {
+  const urls: string[] = [];
+  const stamp = Date.now();
+  let aiArt = 0;
+  let artSlots = 0;
 
-  if (error || !account) {
-    throw new Error(
-      `No connected Instagram account matching "${username}" was found.`
+  for (const [index, slide] of post.slides.entries()) {
+    const art = await generateSlideArt(slide);
+    artSlots += slide.type === "cover" ? slide.items.length : 1;
+    aiArt += art.filter(Boolean).length;
+
+    const png = await renderTradeverseSlide(slide, {
+      day: `${day}/${TRADEVERSE_JOURNEY_LENGTH}`,
+      seed: (stamp % 1000) + index * 17,
+      art,
+    });
+
+    urls.push(
+      await uploadPng(userId, `${stamp}-tradeverse-day${day}-s${index + 1}.png`, png)
     );
   }
 
-  const recentTopics = await getRecentTopics(account.user_id);
+  return { urls, aiArt, artSlots };
+}
 
-  const prompt = buildAccountPrompt(username, recentTopics);
-
-  const generated = await AIService.generateContent(prompt);
-
-  const post = extractJson(generated);
-
-  let imageUrl: string | null = null;
-  let imageNote = "";
-  // Non-secret debug field surfaced in the response (never silently
-  // swallowed) so a failed image generation is visible without needing to
-  // dig through Vercel logs.
-  let imageError: string | null = null;
-
-  try {
-    const { bytes, mimeType } = await AIService.generateImage(
-      post.image_prompt
-    );
-
-    const supabase = createAdminSupabaseClient();
-
-    const ext = mimeType.includes("png") ? "png" : "jpg";
-
-    const path =
-      `${account.user_id}/automation/${Date.now()}-${username}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("media")
-      .upload(path, bytes, {
-        contentType: mimeType,
-        upsert: true,
-      });
-
-    if (uploadError) {
-      throw new Error(`Supabase Storage upload failed: ${uploadError.message}`);
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from("media")
-      .getPublicUrl(path);
-
-    imageUrl = publicUrlData.publicUrl;
-  } catch (error) {
-    imageError = error instanceof Error ? error.message : String(error);
-
-    console.error(
-      `Image generation failed for ${username}:`,
-      imageError
-    );
-
-    imageNote =
-      "[Automation note: automatic image generation failed. Create the slides from the image prompts below and attach them before publishing.]";
-  }
-
-  // generated_content is published verbatim as the Instagram caption, so it
-  // holds ONLY the caption + hashtags. Slide copy, image prompts, sources and
-  // automation notes go into the production plan instead.
-  const generatedContent = buildCaptionWithHashtags(post.caption, post.hashtags);
-  const productionPlan = buildProductionPlan(post, imageNote);
-
+async function insertDraft(row: Record<string, unknown>): Promise<string> {
   const supabase = createAdminSupabaseClient();
-
-  const { data: draft, error: insertError } = await supabase
+  const { data, error } = await supabase
     .from("ai_generations")
-    .insert({
-      user_id: account.user_id,
-      brand_id: brandId,
-      social_account_id: account.id,
-      platform: "instagram",
-      content_type: post.content_type,
-      tone: post.tone,
-      topic: post.topic,
-      prompt: productionPlan,
-      generated_content: generatedContent,
-      image_url: imageUrl,
-      status: "draft",
-    })
+    .insert({ platform: "instagram", status: "draft", ...row })
     .select("id")
     .single();
 
-  if (insertError) {
-    throw insertError;
+  if (error) {
+    throw error;
   }
+
+  return data.id as string;
+}
+
+async function generateForAccount(username: AutomationAccount): Promise<DraftResult> {
+  const { account, brandId, error } = await findAccountByInstagramUsername(username);
+
+  if (error || !account) {
+    throw new Error(`No connected Instagram account matching "${username}" was found.`);
+  }
+
+  const recentTopics = await getRecentTopics(account.id);
+  const prompt = buildAccountPrompt(username, recentTopics);
+  const parsed = parseJsonObject(await AIService.generateContent(prompt));
+
+  const base = {
+    user_id: account.user_id,
+    brand_id: brandId ?? null,
+    social_account_id: account.id,
+  };
+
+  if (username === "tradeverse.academy") {
+    const post = parseTradeversePost(parsed);
+    const day = getNextTradeverseDay(recentTopics);
+
+    let urls: string[] = [];
+    let artNote = "";
+    let imageError: string | null = null;
+
+    try {
+      const rendered = await renderTradeverseCarousel(post, day, account.user_id);
+      urls = rendered.urls;
+      artNote = !ImageGenerationService.isConfigured()
+        ? "[Note: Cloudflare image generation is not configured — slides use code-drawn illustrations.]"
+        : rendered.aiArt < rendered.artSlots
+          ? `[Note: AI artwork succeeded for ${rendered.aiArt}/${rendered.artSlots} visuals; the rest use code-drawn illustrations.]`
+          : "";
+    } catch (renderError) {
+      imageError = renderError instanceof Error ? renderError.message : String(renderError);
+      console.error("Tradeverse slide rendering failed:", imageError);
+    }
+
+    const plan = [
+      `PRODUCTION PLAN — ${post.topic}`,
+      `Format: carousel | Slides: ${post.slides.length}`,
+      imageError
+        ? `[Automation note: slide rendering failed (${imageError}). Attach images manually before publishing.]`
+        : `Rendered slides (in order):\n${urls.map((url, i) => `${i + 1}. ${url}`).join("\n")}`,
+      artNote,
+      post.slides.map(describeTradeverseSlide).join("\n\n"),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const id = await insertDraft({
+      ...base,
+      content_type: post.content_type,
+      tone: post.tone,
+      topic: post.topic,
+      prompt: plan,
+      generated_content: buildCaptionWithHashtags(post.caption, post.hashtags),
+      image_url: urls[0] ?? null,
+    });
+
+    return {
+      instagram_username: username,
+      id,
+      topic: post.topic,
+      image_url: urls[0] ?? null,
+      slide_image_urls: urls,
+      brand_id: brandId ?? null,
+      image_error: imageError,
+    };
+  }
+
+  const post = parseCspPost(parsed);
+
+  const plan = [
+    `PRODUCTION PLAN — ${post.topic}`,
+    `Format: ${post.content_type}${post.layout ? ` | Layout: ${post.layout}` : ""} | Slides: ${post.slides.length}`,
+    "[No automatic image for CSP yet — create each slide from its image prompt and attach it before publishing.]",
+    post.slides
+      .map(
+        (slide) =>
+          `--- Slide ${slide.slide} ---\nON-IMAGE TEXT:\n${slide.on_image_text}\n\n` +
+          `VISUAL:\n${slide.visual}\n\nIMAGE PROMPT (paste into ChatGPT / GPT-image):\n${slide.image_prompt}`
+      )
+      .join("\n\n"),
+  ].join("\n\n");
+
+  const id = await insertDraft({
+    ...base,
+    content_type: post.content_type,
+    tone: post.tone,
+    topic: post.topic,
+    prompt: plan,
+    generated_content: buildCaptionWithHashtags(post.caption, post.hashtags),
+    image_url: null,
+  });
 
   return {
     instagram_username: username,
-    id: draft.id,
+    id,
     topic: post.topic,
-    image_url: imageUrl,
-    brand_id: brandId,
-    image_error: imageError,
+    image_url: null,
+    slide_image_urls: [],
+    brand_id: brandId ?? null,
+    image_error: null,
   };
 }
 
 export async function GET(request: NextRequest) {
   if (!verifyCronSecret(request)) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 }
-    );
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const results = [];
-  const errors = [];
+  const requested = request.nextUrl.searchParams.get("account");
+  let accounts: readonly AutomationAccount[] = AUTOMATION_ACCOUNTS;
 
-  for (const username of AUTOMATION_ACCOUNTS) {
-    try {
-      const result = await generateForAccount(username);
-      results.push(result);
-    } catch (error) {
-      console.error(
-        `Daily automation failed for ${username}:`,
-        error
+  if (requested) {
+    const match = AUTOMATION_ACCOUNTS.find(
+      (handle) => handle === requested.replace(/^@/, "").trim().toLowerCase()
+    );
+
+    if (!match) {
+      return NextResponse.json(
+        { error: `Unknown account "${requested}". Use one of: ${AUTOMATION_ACCOUNTS.join(", ")}.` },
+        { status: 400 }
       );
+    }
+
+    accounts = [match];
+  }
+
+  const results: DraftResult[] = [];
+  const errors: { instagram_username: string; error: string }[] = [];
+
+  for (const username of accounts) {
+    try {
+      results.push(await generateForAccount(username));
+    } catch (error) {
+      console.error(`Daily automation failed for ${username}:`, error);
 
       errors.push({
         instagram_username: username,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unknown automation error.",
+        error: error instanceof Error ? error.message : "Unknown automation error.",
       });
     }
   }

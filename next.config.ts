@@ -9,6 +9,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // The Tradeverse slide renderer reads these at runtime with fs. Listing
+  // them here makes sure Vercel bundles them into the serverless function.
+  outputFileTracingIncludes: {
+    "/api/automation/generate-daily": [
+      "./lib/render/fonts/**/*",
+      "./public/brand/**/*",
+    ],
+  },
 };
 
 export default nextConfig;

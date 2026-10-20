@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { AIService } from "@/lib/services/ai.service";
 import {
   findAccountByInstagramUsername,
   verifyAutomationSecret,
@@ -56,42 +55,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let imageUrl: string | null = null;
-  let imageNote = "";
-  // Non-secret debug field surfaced in the response (never silently
-  // swallowed) so a failed image generation is visible without needing to
-  // dig through Vercel logs.
-  let imageError: string | null = null;
-
-  try {
-    const { bytes, mimeType } = await AIService.generateImage(image_prompt);
-    const supabase = createAdminSupabaseClient();
-    const ext = mimeType.includes("png") ? "png" : "jpg";
-    const path = `${account.user_id}/automation/${Date.now()}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("media")
-      .upload(path, bytes, { contentType: mimeType, upsert: true });
-
-    if (uploadError) {
-      throw new Error(`Supabase Storage upload failed: ${uploadError.message}`);
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from("media")
-      .getPublicUrl(path);
-
-    imageUrl = publicUrlData.publicUrl;
-  } catch (error) {
-    imageError = error instanceof Error ? error.message : String(error);
-    console.error("Daily draft image generation failed:", imageError);
-    imageNote =
-      "\n\n[Automation note: image generation failed for this draft — please attach an image manually before publishing.]";
-  }
+  // Automatic images via pollinations.ai were removed (2026-10-19) — they
+  // didn't match either brand's layout. This endpoint now saves the draft
+  // without an image; attach one manually before publishing. Tradeverse
+  // template rendering lives in /api/automation/generate-daily.
+  const imageUrl: string | null = null;
+  const imageError: string | null = null;
+  const imageNote =
+    "\n\n[Automation note: no automatic image — attach one before publishing. Image prompt: " +
+    image_prompt +
+    "]";
 
   const generatedContent =
     post_text +
-    imageNote +
     (sources && sources.length > 0
       ? `\n\nSources:\n${sources.map((s) => `- ${s}`).join("\n")}`
       : "");
@@ -107,7 +83,7 @@ export async function POST(request: NextRequest) {
       content_type,
       tone,
       topic,
-      prompt: prompt_summary,
+      prompt: prompt_summary + imageNote,
       generated_content: generatedContent,
       image_url: imageUrl,
       status: "draft",

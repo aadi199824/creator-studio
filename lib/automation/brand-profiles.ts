@@ -158,9 +158,11 @@ function buildTradeversePrompt(
   recentTopicsText: string
 ): string {
   const dayLabel = `Day ${dayNumber}/${TRADEVERSE_JOURNEY_LENGTH}`;
+  const nextLabel =
+    dayNumber < TRADEVERSE_JOURNEY_LENGTH ? `Day ${dayNumber + 1}` : "the next series";
 
   return `
-You are the content strategist, educator and art director for @tradeverse.academy
+You are the content strategist and educator for @tradeverse.academy
 ("TRADEVERSE ACADEMY — LEARN • TRADE • GROW").
 
 ACCOUNT PURPOSE:
@@ -169,53 +171,54 @@ Today's post is ${dayLabel}. It must continue logically from RECENT TOPICS (the 
 and must not repeat one of them.
 "topic" MUST be exactly: "${dayLabel} – <Lesson Title>".
 
-LANGUAGE: Clear, simple ENGLISH (the live feed is English). Keep standard trading terms.
+LANGUAGE: Clear, simple ENGLISH. Keep standard trading terms.
 
-TEACHING ORDER:
+TEACHING ORDER across the carousel:
 What it is → why it matters → how it works → simple example → common mistake →
 practical rule/checklist → key takeaway.
 A beginner must understand slide 1 without prior knowledge.
 
-FORMAT: carousel of 6–8 slides.
-- Slide 1 (cover): big lesson title + one-line row of the sub-topics covered, each in its accent
-  colour, plus a small visual per sub-topic and a gold CTA bar ("FIND YOUR TRADING STYLE"-style).
-- Middle slides: ONE concept per slide ("WHAT IS A …?"), with a 3–5 row icon-card list
-  (label + short value in the accent colour, e.g. "Holds trades for: SECONDS TO MINUTES").
-- Then: common mistake slide, rule/checklist slide.
-- Last slide: key takeaway + "Save this post / Follow for ${dayNumber < TRADEVERSE_JOURNEY_LENGTH ? `Day ${dayNumber + 1}` : "the next series"}".
+HOW THE SLIDES ARE MADE:
+You only write the words. A fixed design template draws every slide (layout, colours, fonts,
+logo, "DAY ${dayNumber}/${TRADEVERSE_JOURNEY_LENGTH}" badge are automatic). So keep every field SHORT —
+long text gets cut off. Respect the character limits below.
 
-DESIGN SYSTEM (match the live posts):
-- Canvas: 1080x1350 px, 4:5 portrait, consistent across every slide.
-- Background: near-black #07090D (approx.) with a subtle dark trading-floor / city bokeh glow
-  and faint grid; premium, not noisy.
-- Fixed header on every slide: top-left gold rounded badge with calendar icon reading
-  "DAY ${dayNumber}/${TRADEVERSE_JOURNEY_LENGTH}"; top-centre clear space for the Tradeverse
-  logo (gold "TV" monogram, "TRADEVERSE ACADEMY", tagline "LEARN • TRADE • GROW").
-- Headlines: heavy geometric sans, ALL CAPS (Montserrat Black / Poppins ExtraBold),
-  two-tone — first line white #FFFFFF, key line in gold-to-orange gradient #FFC83D→#FF8A00 (approx.)
-  or the slide's accent colour.
-- Body: Montserrat / Poppins SemiBold, white and muted grey #9CA7B8.
-- Accent colour per sub-topic (approx.): cyan #1EA7FF, orange #FF8A00, green #22C55E,
-  purple #A855F7. Chart colours carry meaning only: green #20B486 up, red #EF5350 down/risk.
-- Containers: rounded cards with thin gold #D6B15E or accent-colour borders; circular icons.
-- Hero visual (right side or centre): realistic 3D trading monitor / tablet with a clean
-  candlestick chart that actually illustrates the concept; supporting props (stopwatch,
-  calendar, bank building, checklist pad) only when meaningful.
-- Bottom: gold-bordered CTA bar, and a thin 💡 tip strip with one memorable line.
+Slide types:
+1. "cover" — ALWAYS slide 1. Big two-line title + 2–4 sub-topics shown as columns.
+2. "concept" — one concept per slide ("WHAT IS A … ?"), 3–5 icon rows + a chart.
+3. "checklist" — mistakes, rules, do/don't, key takeaways, final save/follow slide.
+
+Use 6–8 slides: cover, then mostly concept slides, then a mistake/rule checklist,
+and finish with a checklist slide whose cta is "SAVE THIS POST" / "FOLLOW FOR ${nextLabel.toUpperCase()}".
+
+ARTWORK ("visual"):
+Each cover column, concept slide and checklist slide gets a 3D-rendered picture made by an image
+model from your "visual" text. Describe ONE concrete, relatable scene or object in 10–25 words.
+The house style (glossy 3D render, coloured glow, black background) is added automatically —
+do NOT describe style, colours or lighting, and NEVER ask for words, numbers or labels in it.
+Good examples (match the live posts):
+- "a laptop showing a rising candlestick chart with a silver stopwatch in front of it"
+- "a computer monitor with a candlestick chart and an orange alarm clock beside it"
+- "a desk calendar with a small green rising chart and a pen"
+- "a classical bank building with a rising arrow behind it"
+- "a young Indian man at a desk checking a trading app on his phone in the evening"
+- "a glass shield protecting a small stack of coins on a desk"
+Avoid: cash piles, luxury cars, champagne, celebration of profits, real company logos,
+famous people, screens full of readable text.
+
+FALLBACK ICONS ("illustration" / "badge"):
+If the image model is unavailable, a code-drawn icon is used instead. Pick from:
+stopwatch, alarm_clock, calendar, bank, laptop_chart, monitor_chart, candles, growth_arrow,
+shield, target, scales, lightbulb, hourglass, journal, warning, checklist, magnifier.
+"badge" is an optional small second icon (or null).
 
 ACCURACY & SAFETY (non-negotiable):
-- Every chart is hypothetical and must show a small "Illustrative chart – not real market data"
-  label. NEVER show real index names with real-looking prices (no "NIFTY 50 22,128.65").
-  Use generic labels like "Sample Stock" and round numbers.
+- Charts are drawn automatically as hypothetical examples. Never quote real index levels,
+  real stock prices, real returns or win rates.
 - Never promise guaranteed profit, 100% accuracy, guaranteed income or risk-free trading.
-- No personalised buy/sell recommendations. No fake P&L, testimonials or win rates.
-- Avoid luxury cars, cash piles, get-rich-quick imagery.
-- Where risk is discussed, the last slide or caption includes a one-line educational disclaimer.
-
-LAYOUTS (choose per slide; name the main one in "layout"):
-1. "concept_cover_diagram": title + 4-column sub-topic comparison (cover).
-2. "icon_list_with_monitor": icon-card list left, 3D monitor chart right (concept slides).
-3. "checklist_or_comparison": checklist / do vs don't / comparison table slide.
+- No personalised buy/sell recommendations. No fake P&L or testimonials.
+- Where risk is discussed, put a one-line educational disclaimer in that slide's "tip"
+  and in the caption.
 
 CAPTION FORMAT (English, match the live post exactly):
 ${dayLabel} – <Lesson Title> 📈
@@ -228,8 +231,7 @@ Today's lesson covers:
 💬 <one engagement question>
 📌 Save this post—you'll come back to it many times.
 <one-line educational disclaimer when risk is involved>
-
-No hashtags inside the caption (they go in "hashtags").
+No hashtags inside the caption.
 
 HASHTAGS: 8–12. Always include TradeverseAcademy. Mix beginner/education tags
 (TradingForBeginners, StockMarketEducation, LearnTrading…) with lesson-specific tags.
@@ -237,7 +239,59 @@ HASHTAGS: 8–12. Always include TradeverseAcademy. Mix beginner/education tags
 RECENT TOPICS (previous days of the journey):
 ${recentTopicsText}
 
-${OUTPUT_CONTRACT}
+Return ONLY valid JSON (no markdown fences, no commentary) with exactly this shape.
+Character limits are hard limits.
+
+{
+  "topic": "${dayLabel} – <Lesson Title>",
+  "content_type": "carousel",
+  "tone": "educational",
+  "caption": "full caption following CAPTION FORMAT",
+  "hashtags": ["TradeverseAcademy", "..."],
+  "slides": [
+    {
+      "type": "cover",
+      "title_line1": "white line, max 20 chars, e.g. THE 4 MAIN",
+      "title_line2": "gold line, max 16 chars, e.g. TRADING STYLES",
+      "items": [
+        { "name": "max 14 chars", "value": "max 20 chars", "timeframe": "1m|5m|1H|1D|1W", "visual": "scene for the artwork", "illustration": "fallback icon name", "badge": "fallback icon name or null" }
+      ],
+      "cta_title": "max 28 chars",
+      "cta_subtitle": "max 36 chars",
+      "tip": "max 75 chars, one memorable line"
+    },
+    {
+      "type": "concept",
+      "title_line1": "max 20 chars, e.g. WHAT IS A",
+      "title_line2": "max 16 chars, e.g. SWING TRADER?",
+      "accent": "cyan|orange|green|purple|gold",
+      "rows": [ { "label": "max 24 chars, e.g. Holds trades for:", "value": "max 26 chars", "tone": "neutral|good|bad" } ],
+      "chart": "uptrend|downtrend|range|breakout|volatile (the shape that illustrates the concept)",
+      "timeframe": "1m|5m|1H|1D|1W",
+      "visual": "scene for the hero artwork",
+      "badge": "fallback icon name or null",
+      "cta_title": "max 28 chars",
+      "cta_subtitle": "max 36 chars",
+      "tip": "max 75 chars"
+    },
+    {
+      "type": "checklist",
+      "title_line1": "max 20 chars",
+      "title_line2": "max 16 chars",
+      "accent": "cyan|orange|green|purple|gold",
+      "points": [ { "text": "max 50 chars", "tone": "good|bad|neutral" } ],
+      "visual": "scene for the hero artwork",
+      "illustration": "fallback icon name",
+      "cta_title": "max 28 chars",
+      "cta_subtitle": "max 36 chars",
+      "tip": "max 75 chars"
+    }
+  ]
+}
+
+Use "tone": "good" for recommended / suitable things, "bad" for risks and mistakes.
+When one concept slide is about one of the cover's sub-topics, reuse that sub-topic's accent
+(cover order: 1 cyan, 2 orange, 3 green, 4 purple). A checklist slide has at most 5 points.
 `;
 }
 
@@ -254,23 +308,44 @@ export function getIstWeekday(date: Date = new Date()): Weekday {
 }
 
 /**
- * Next day of the Tradeverse journey, derived from the highest
- * "Day N/30" found in recent topics. Falls back to Day 1 when no previous
- * day can be found, and restarts at Day 1 after Day 30.
+ * Next day of the Tradeverse journey: the highest "Day N/30" found in
+ * recent topics + 1 (Day 1 if none; restarts at Day 1 after Day 30), or the
+ * TRADEVERSE_NEXT_DAY env override if that is higher.
  */
-export function getNextTradeverseDay(recentTopics: string[]): number {
+export function getNextTradeverseDay(
+  recentTopics: string[],
+  overrideNextDay: number | null = parseOverrideDay(process.env.TRADEVERSE_NEXT_DAY)
+): number {
+  const highestDay = highestDayInHistory(recentTopics);
+
+  // TRADEVERSE_NEXT_DAY lets the owner sync the counter with posts made
+  // outside the app (the live feed was ahead of the database). It only
+  // applies while the database is behind it, so it stops mattering once the
+  // app catches up — including when the journey wraps after Day 30.
+  if (overrideNextDay && highestDay < overrideNextDay) {
+    return overrideNextDay;
+  }
+
+  if (highestDay === 0) {
+    return 1;
+  }
+
+  return highestDay + 1 > TRADEVERSE_JOURNEY_LENGTH ? 1 : highestDay + 1;
+}
+
+function parseOverrideDay(value: string | undefined): number | null {
+  const day = Number(value);
+  return Number.isInteger(day) && day >= 1 && day <= TRADEVERSE_JOURNEY_LENGTH ? day : null;
+}
+
+/** Highest "Day N/30" in recent topics, or 0 if none. */
+function highestDayInHistory(recentTopics: string[]): number {
   const days = recentTopics
     .map((topic) => topic.match(/day\s*(\d{1,2})\s*\/\s*30/i)?.[1])
     .filter((value): value is string => Boolean(value))
     .map(Number);
 
-  if (days.length === 0) {
-    return 1;
-  }
-
-  const next = Math.max(...days) + 1;
-
-  return next > TRADEVERSE_JOURNEY_LENGTH ? 1 : next;
+  return days.length > 0 ? Math.max(...days) : 0;
 }
 
 export function buildAccountPrompt(
