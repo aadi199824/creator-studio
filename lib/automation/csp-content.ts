@@ -135,7 +135,7 @@ export function parseCspTemplate(
         format,
         title_white: clean(t.title_white, 14, "CORPORATE").toUpperCase(),
         title_red: clean(t.title_red, 12, "DICTIONARY").toUpperCase(),
-        subtitle: clean(t.subtitle, 40, "Office की भाषा → असली मतलब"),
+        subtitle: clean(t.subtitle, 40, "Office की भाषा » असली मतलब"),
         entries,
         footer: clean(t.footer, 60, "आपके office में कौनसा सबसे ज़्यादा चलता है?"),
       };

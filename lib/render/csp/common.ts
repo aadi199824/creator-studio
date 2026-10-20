@@ -39,13 +39,27 @@ export type RenderedText = { buffer: Buffer; width: number; height: number };
 
 // --- text -------------------------------------------------------------------
 
+/**
+ * Poppins has no glyphs for arrows, check marks, dingbats or emoji, and the
+ * Vercel runtime has no fallback font — such characters would render as
+ * empty boxes. Swap the common ones for supported equivalents and drop the
+ * rest.
+ */
+function replaceUnsupportedGlyphs(text: string): string {
+  return text
+    .replace(/[→⟶➜➔➡]/g, "»")
+    .replace(/[←⟵⬅]/g, "«")
+    .replace(/[\u2190-\u21FF\u2600-\u27BF\u2B00-\u2BFF\u{1F000}-\u{1FAFF}\uFE0F\u200D]/gu, "")
+    .replace(/ {2,}/g, " ");
+}
+
 function escapeMarkup(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Pango markup; text inside **double asterisks** switches to `highlight`. */
 export function markup(text: string, base: string, highlight: string = COLORS.yellow): string {
-  return escapeMarkup(text)
+  return escapeMarkup(replaceUnsupportedGlyphs(text))
     .split("**")
     .map((part, index) =>
       part ? `<span foreground="${index % 2 === 1 ? highlight : base}">${part}</span>` : ""

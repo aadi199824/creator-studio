@@ -16,7 +16,7 @@ const SAMPLES: Record<CspFormat, CspTemplateContent> = {
     format: "dictionary",
     title_white: "CORPORATE",
     title_red: "DICTIONARY",
-    subtitle: "Office की भाषा → असली मतलब",
+    subtitle: "Office की भाषा » असली मतलब",
     entries: [
       { phrase: "ASAP", meaning: "कल ही चाहिए था" },
       { phrase: "Quick call", meaning: "1 घंटे की **meeting**" },

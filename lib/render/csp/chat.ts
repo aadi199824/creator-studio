@@ -19,6 +19,16 @@ import {
 
 const PHONE_WIDTH = 740;
 const BUBBLE_MAX_TEXT = 470;
+const TICKS_WIDTH = 26;
+
+/** Blue double tick ("read"), drawn as SVG. */
+function readTicksSvg(): Buffer {
+  return svg(
+    TICKS_WIDTH,
+    14,
+    `<path d="M1 7 L5 11 L12 3 M10 11 L11 12 L18 3" stroke="#53BDEB" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
+  );
+}
 
 /**
  * Late-night chat with "Manager" on a generic phone screen (deliberately not
@@ -35,13 +45,12 @@ export async function renderChat(content: CspChat): Promise<Buffer> {
   const bubbles = [];
   for (const message of content.messages) {
     const text = await renderText(markup(message.text, COLORS.white), 32, { width: BUBBLE_MAX_TEXT, align: "left" });
-    const time = await renderText(
-      markup(message.time + (message.from === "me" ? "  ✓✓" : ""), COLORS.grey),
-      18,
-      { align: "left" }
-    );
-    const width = Math.max(text.width, time.width) + 48;
-    const height = text.height + time.height + 34;
+    // Read ticks are drawn as a shape: Poppins has no "✓" glyph and the
+    // server has no fallback font, so text ticks render as empty boxes.
+    const time = await renderText(markup(message.time, COLORS.grey), 18, { align: "left" });
+    const tickWidth = message.from === "me" ? TICKS_WIDTH + 8 : 0;
+    const width = Math.max(text.width, time.width + tickWidth) + 48;
+    const height = text.height + time.height + 40;
     bubbles.push({ message, text, time, width, height });
   }
 
@@ -83,8 +92,19 @@ export async function renderChat(content: CspChat): Promise<Buffer> {
     layers.push(
       { input: roundedRectSvg(bubble.width, bubble.height, { fill: mine ? "#7A0A0F" : "#262626", radius: 22 }), left, top: by },
       { input: bubble.text.buffer, left: left + 24, top: by + 16 },
-      { input: bubble.time.buffer, left: left + bubble.width - 24 - bubble.time.width, top: by + 18 + bubble.text.height }
+      {
+        input: bubble.time.buffer,
+        left: left + bubble.width - 24 - bubble.time.width - (mine ? TICKS_WIDTH + 8 : 0),
+        top: by + 24 + bubble.text.height,
+      }
     );
+    if (mine) {
+      layers.push({
+        input: readTicksSvg(),
+        left: left + bubble.width - 24 - TICKS_WIDTH,
+        top: by + 24 + bubble.text.height + Math.round((bubble.time.height - 14) / 2),
+      });
+    }
     by += bubble.height + gap;
   }
 

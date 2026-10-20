@@ -163,7 +163,7 @@ const CSP_FORMAT_SPECS: Record<CspFormat, string> = {
   dictionary: `"template": {
   "title_white": "max 12 chars: CORPORATE, or match the theme — HR, MANAGER, APPRAISAL, MONDAY, WFH, MEETING",
   "title_red": "DICTIONARY",
-  "subtitle": "max 36 chars Hinglish, e.g. 'Office की भाषा → असली मतलब'",
+  "subtitle": "max 36 chars Hinglish, e.g. 'Office की भाषा » असली मतलब' (never use arrow symbols like →)",
   "entries": [ { "phrase": "real office phrase in English, max 26 chars", "meaning": "its REAL meaning, short Hinglish punchline, max 36 chars" } ],
   "footer": "max 55 chars Hinglish engagement line"
 }
