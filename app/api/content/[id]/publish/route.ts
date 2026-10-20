@@ -45,7 +45,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "This draft has no image yet. Add one (Edit) before publishing.",
+          "This draft has no image yet. Click Edit, upload one under \"Post image\", then publish.",
       },
       { status: 400 }
     );

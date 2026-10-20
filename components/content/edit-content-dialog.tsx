@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -29,8 +30,17 @@ import {
   ContentFormValues,
 } from "@/lib/validations/content";
 
+import { ImageUpload } from "@/components/publishing/image-upload";
 import { ContentService } from "@/lib/services/content.service";
+import { StorageService } from "@/lib/services/storage.service";
+import { createClient } from "@/lib/supabase/client";
 import { Content } from "@/lib/types/content";
+
+const supabase = createClient();
+
+// Instagram's publishing API accepts JPEG/PNG images up to 8 MB.
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"];
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 interface Props {
   open: boolean;
@@ -56,8 +66,13 @@ export default function EditContentDialog({
     resolver: zodResolver(contentSchema),
   });
 
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
   useEffect(() => {
     if (!content) return;
+
+    setImageUrl(content.image_url ?? null);
 
     reset({
       topic: content.topic ?? "",
@@ -68,6 +83,56 @@ export default function EditContentDialog({
       prompt: content.prompt ?? "",
     });
   }, [content, reset]);
+
+  /**
+   * Attaches an image to the draft immediately (separate from "Save
+   * Changes"), so drafts created without one — e.g. CSP automation drafts —
+   * can be published.
+   */
+  async function handleImageSelect(file: File) {
+    if (!content) return;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      toast.error("Please choose a JPG or PNG image — Instagram doesn't accept other formats.");
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast.error("This image is larger than 8 MB, which is Instagram's limit. Please use a smaller file.");
+      return;
+    }
+
+    setUploadingImage(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        toast.error("Your session has expired. Please log in again.");
+        return;
+      }
+
+      const publicUrl = await StorageService.uploadImage(file, user.id);
+      const { error } = await ContentService.update(content.id, { image_url: publicUrl });
+
+      if (error) {
+        console.error("Attach image error:", error);
+        toast.error("The image uploaded, but we couldn't attach it to this draft. Please try again.");
+        return;
+      }
+
+      setImageUrl(publicUrl);
+      toast.success("Image attached. You can publish this draft now.");
+      onUpdated();
+    } catch (error) {
+      console.error("Image upload error:", error);
+      toast.error("We couldn't upload this image. Please check your connection and try again.");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
 
   async function onSubmit(values: ContentFormValues) {
     if (!content) return;
@@ -105,6 +170,38 @@ export default function EditContentDialog({
           onSubmit={handleSubmit(onSubmit)}
           className="space-y-5"
         >
+          {/* Image */}
+          <div className="rounded-lg border p-4">
+            <p className="mb-3 text-sm font-medium">Post image</p>
+
+            <div className="flex items-center gap-4">
+              {imageUrl ? (
+                <Image
+                  src={imageUrl}
+                  alt="Post image"
+                  width={96}
+                  height={120}
+                  className="h-[120px] w-[96px] rounded-md border object-cover"
+                />
+              ) : (
+                <div className="flex h-[120px] w-[96px] items-center justify-center rounded-md border border-dashed text-center text-xs text-gray-500">
+                  No image yet
+                </div>
+              )}
+
+              <div className="space-y-1">
+                {uploadingImage ? (
+                  <p className="text-sm text-gray-600">Uploading…</p>
+                ) : (
+                  <ImageUpload onSelect={handleImageSelect} />
+                )}
+                <p className="text-xs text-gray-500">
+                  JPG or PNG, up to 8 MB. {imageUrl ? "Uploading replaces the current image." : "Saved to this draft immediately."}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Topic */}
           <div>
             <Input
