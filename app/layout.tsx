@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Creator Studio AI",
   description: "AI-powered social media management platform",
+  // Home-screen install (needed for phone notifications on iPhone).
+  appleWebApp: { capable: true, title: "Creator Studio", statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
 
 export default function RootLayout({

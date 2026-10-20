@@ -16,6 +16,22 @@ const nextConfig: NextConfig = {
       "./lib/render/fonts/**/*",
       "./public/brand/**/*",
     ],
+    "/api/automation/generate-now": [
+      "./lib/render/fonts/**/*",
+      "./public/brand/**/*",
+    ],
+  },
+  // The phone-notification service worker must never be served stale.
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+    ];
   },
 };
 

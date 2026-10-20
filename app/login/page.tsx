@@ -24,8 +24,16 @@ export default function LoginPage() {
       return;
     }
 
+    // Return to the page that sent the user here (e.g. /approve/<id> from a
+    // phone notification). Only same-site paths are accepted.
+    const next = new URLSearchParams(window.location.search).get("next");
+    const target =
+      next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\")
+        ? next
+        : "/dashboard";
+
     router.refresh();
-router.push("/dashboard");
+    router.push(target);
   }
 
   return (

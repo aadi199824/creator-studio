@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { InstagramCard } from "@/components/publishing/instagram-card";
+import { PhoneNotificationsCard } from "@/components/settings/phone-notifications-card";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -63,6 +64,8 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <PhoneNotificationsCard />
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Connected Accounts</h2>
