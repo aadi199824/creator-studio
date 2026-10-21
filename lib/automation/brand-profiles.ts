@@ -250,6 +250,21 @@ one "break" (e.g. 'Lunch (desk pe, mute karke)'), and exactly ONE "work" event s
 6 fields (PASSENGER, GATE, SEAT, STATUS, BAGGAGE, CLASS or themed equivalents) with office
 punchlines; STATUS usually red (DELAYED). 2 stub items. Route can change with the theme
 (e.g. JAN → APPRAISAL, LOGIN → LOGOUT).`,
+
+  olympics: `"template": {
+  "title_top": "max 12 chars, Title Case, first headline line, e.g. 'Corporate', 'Monday', 'Appraisal', 'WFH'",
+  "title_highlight": "max 16 chars, the highlighted second line that names the list, e.g. 'Olympic Events', 'Survival Kit', 'Excuses Hall', 'Red Flags', 'Love Languages'",
+  "edition": "short third line, max 6 chars: the year (e.g. 2026) or a short tag like 'Pt. 2'; empty string if not needed",
+  "annotation": "max 45 chars hand-note, e.g. 'Gold medals in survival, not **productivity**.'",
+  "events": [ { "name": "max 24 chars event name, e.g. 'Politics Dodge'", "text": "max 75 chars punchline, e.g. 'Dodging office politics like **Neo** in the Matrix.'", "icon": "dodge|email|speech|laptop|coffee|clock|calendar|meeting" } ],
+  "footer": "max 45 chars hand-note, e.g. 'Same job, different kind of **competition**. :)'"
+}
+This is CSP's signature hand-drawn list layout. Pick a FRESH list idea that fits today's theme
+(don't repeat 'Olympic Events' unless it fits; check RECENT TOPICS). Each "event" is one list item.
+ALL template text for this format is in simple, witty ENGLISH (no Hindi, no Devanagari) — the
+design uses a hand-written English font. Exactly 4 items. Pick the icon that best fits each
+event (email for CC/reply-all, laptop for looking busy, speech for 'per my last email', dodge for
+escaping work/politics, calendar for meetings, clock for overtime, coffee for breaks).`,
 };
 
 // ---------------------------------------------------------------------------

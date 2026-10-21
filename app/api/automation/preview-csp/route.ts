@@ -12,6 +12,20 @@ import { renderCspPost } from "@/lib/render/csp-post";
  */
 
 const SAMPLES: Record<CspFormat, CspTemplateContent> = {
+  olympics: {
+    format: "olympics",
+    title_top: "Corporate",
+    title_highlight: "Olympic Events",
+    edition: "2026",
+    annotation: "Gold medals in survival, not **productivity**.",
+    events: [
+      { name: "Politics Dodge", text: "Dodging office politics like **Neo** in the Matrix.", icon: "dodge" },
+      { name: "CC Throw", text: "Strategic use of the **\"CC\"** line as a weapon of mass destruction.", icon: "email" },
+      { name: "Straight Face", text: "Saying **\"Per my last email\"** with a straight face.", icon: "speech" },
+      { name: "VP Walk-By", text: "Pretending to look **busy** when the VP walks by.", icon: "laptop" },
+    ],
+    footer: "Same job, different kind of **competition**. :)",
+  },
   dictionary: {
     format: "dictionary",
     title_white: "CORPORATE",

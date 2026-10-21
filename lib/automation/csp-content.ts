@@ -14,6 +14,7 @@
  * - battery        — employee energy battery, Monday → Friday
  * - calendar       — a day packed with meetings, 15 min of actual work
  * - ticket         — "CSP Airways" boarding pass, MON → FRI, delayed
+ * - olympics       — "Corporate Olympics": 4 office "events" with medals
  *
  * Highlight syntax: wrap words in **double asterisks** to render them in
  * the brand yellow.
@@ -27,6 +28,7 @@ export const CSP_FORMATS = [
   "notifications",
   "poster",
   "battery",
+  "olympics",
   "versus",
   "calendar",
   "ticket",
@@ -44,6 +46,7 @@ export const CSP_FORMAT_LABELS: Record<CspFormat, string> = {
   versus: "Expectation vs Reality",
   calendar: "Calendar Overload",
   ticket: "Boarding Pass",
+  olympics: "Hand-drawn List (Olympics style)",
 };
 
 export type CspLineColor = "white" | "red" | "yellow";
@@ -137,6 +140,19 @@ export type CspTicket = {
   footer: string;
 };
 
+export const CSP_OLYMPICS_ICONS = ["dodge", "email", "speech", "laptop", "coffee", "clock", "calendar", "meeting"] as const;
+export type CspOlympicsIcon = (typeof CSP_OLYMPICS_ICONS)[number];
+
+export type CspOlympics = {
+  format: "olympics";
+  title_top: string;
+  title_highlight: string;
+  edition: string;
+  annotation: string;
+  events: { name: string; text: string; icon: CspOlympicsIcon }[];
+  footer: string;
+};
+
 export type CspTemplateContent =
   | CspDictionary
   | CspChat
@@ -146,17 +162,22 @@ export type CspTemplateContent =
   | CspPayslip
   | CspBattery
   | CspCalendar
-  | CspTicket;
+  | CspTicket
+  | CspOlympics;
 
 // --- format rotation ----------------------------------------------------------
 
 /**
- * One format per IST calendar day, cycling through CSP_FORMATS so the same
- * template never appears two days running. Deterministic — no DB needed.
+ * Today's format, by IST calendar day. The hand-drawn list ("olympics") is
+ * CSP's main look and runs every other day (~3–4 days a week); the days in
+ * between cycle through the dark formats so the feed stays varied.
+ * Deterministic — no DB needed. Any format can still be picked manually.
  */
 export function getCspFormatForDate(date: Date = new Date()): CspFormat {
   const istDay = Math.floor((date.getTime() + 5.5 * 60 * 60 * 1000) / 86_400_000);
-  return CSP_FORMATS[istDay % CSP_FORMATS.length];
+  if (istDay % 2 === 0) return "olympics";
+  const darkFormats = CSP_FORMATS.filter((format) => format !== "olympics");
+  return darkFormats[Math.floor(istDay / 2) % darkFormats.length];
 }
 
 // --- sanitising ---------------------------------------------------------------
@@ -360,6 +381,29 @@ export function parseCspTemplate(
         day_label: clean(t.day_label, 14, "Tuesday"),
         summary: clean(t.summary, 18, `${events.length} meetings`),
         events,
+      };
+    }
+
+    case "olympics": {
+      const events = objects(t.events)
+        .map((event, index) => ({
+          name: clean(event.name, 26),
+          text: clean(event.text, 80),
+          icon: (CSP_OLYMPICS_ICONS as readonly string[]).includes(event.icon as string)
+            ? (event.icon as CspOlympicsIcon)
+            : CSP_OLYMPICS_ICONS[index % CSP_OLYMPICS_ICONS.length],
+        }))
+        .filter((event) => event.name && event.text)
+        .slice(0, 4);
+      if (events.length < 3) return null;
+      return {
+        format,
+        title_top: clean(t.title_top, 12, "Corporate"),
+        title_highlight: clean(t.title_highlight, 16, "Olympic Events"),
+        edition: typeof t.edition === "string" ? clean(t.edition, 6) : String(new Date().getFullYear()),
+        annotation: clean(t.annotation, 50),
+        events,
+        footer: clean(t.footer, 60),
       };
     }
 

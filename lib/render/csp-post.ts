@@ -10,6 +10,7 @@ import { renderCalendar } from "./csp/calendar";
 import { renderChat } from "./csp/chat";
 import { renderDictionary } from "./csp/dictionary";
 import { renderNotifications } from "./csp/notifications";
+import { renderOlympics } from "./csp/olympics";
 import { renderPayslip } from "./csp/payslip";
 import { renderPoster } from "./csp/poster";
 import { renderTicket } from "./csp/ticket";
@@ -37,5 +38,7 @@ export async function renderCspPost(content: CspTemplateContent): Promise<Buffer
       return renderCalendar(content);
     case "ticket":
       return renderTicket(content);
+    case "olympics":
+      return renderOlympics(content);
   }
 }

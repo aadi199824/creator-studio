@@ -67,16 +67,19 @@ export function markup(text: string, base: string, highlight: string = COLORS.ye
     .join("");
 }
 
+/** Alternative font for a format (must also cover Devanagari). */
+export type CspFont = { name: string; file: string };
+
 export async function renderText(
   markupText: string,
   sizePx: number,
-  options: { width?: number; align?: "left" | "centre" | "right" } = {}
+  options: { width?: number; align?: "left" | "centre" | "right"; font?: CspFont } = {}
 ): Promise<RenderedText> {
   const buffer = await sharp({
     text: {
       text: markupText,
-      font: `${FONT_NAME} ${sizePx}`,
-      fontfile: FONT_FILE,
+      font: `${options.font?.name ?? FONT_NAME} ${sizePx}`,
+      fontfile: options.font?.file ?? FONT_FILE,
       rgba: true,
       dpi: 72, // 1pt = 1px, so sizePx is the real pixel size
       align: options.align ?? "centre",
@@ -94,9 +97,10 @@ export async function renderText(
 export async function renderFitted(
   markupText: string,
   sizePx: number,
-  maxWidth: number
+  maxWidth: number,
+  font?: CspFont
 ): Promise<RenderedText> {
-  const rendered = await renderText(markupText, sizePx);
+  const rendered = await renderText(markupText, sizePx, { font });
   if (rendered.width <= maxWidth) return rendered;
 
   const buffer = await sharp(rendered.buffer).resize({ width: maxWidth }).png().toBuffer();
@@ -180,8 +184,8 @@ export function phoneFrameSvg(width: number, height: number, screen: string): Bu
   );
 }
 
-export async function toBuffer(layers: Layer[]): Promise<Buffer> {
-  return sharp(backgroundSvg()).composite(layers).png().toBuffer();
+export async function toBuffer(layers: Layer[], background: Buffer = backgroundSvg()): Promise<Buffer> {
+  return sharp(background).composite(layers).png().toBuffer();
 }
 
 export async function rotated(buffer: Buffer, degrees: number): Promise<RenderedText> {
@@ -206,11 +210,11 @@ export async function composeOn(
 // --- brand ------------------------------------------------------------------------
 
 const LOGO_FILE = path.join(process.cwd(), "public/brand/csp-logo.jpg");
-const LOGO_SIZE = 84;
+export const LOGO_SIZE = 84;
 let logoPromise: Promise<Buffer | null> | null = null;
 
 /** The CSP logo cropped to a circle with a thin white ring (null if the file is missing). */
-function loadLogo(): Promise<Buffer | null> {
+export function loadLogo(): Promise<Buffer | null> {
   logoPromise ??= (async () => {
     try {
       const mask = svg(LOGO_SIZE, LOGO_SIZE, `<circle cx="${LOGO_SIZE / 2}" cy="${LOGO_SIZE / 2}" r="${LOGO_SIZE / 2}" fill="#fff"/>`);
